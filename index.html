@@ -30,6 +30,9 @@
 <style>
   body { background-color: #0a0a0a; color: #ffffff; }
   .glass-nav { background: rgba(10,10,10,0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .lyrics-line { padding: .375rem 0; color: #a1a1a1; font-size: .95rem; line-height: 1.6; transition: color .2s, transform .2s; }
+  .lyrics-line.active { color: #ffffff; font-weight: 700; font-size: 1.05rem; transform: scale(1.02); }
+  .lyrics-line.plain { color: #d4d4d4; }
   .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
@@ -436,7 +439,7 @@
         </div>
       </div>
 
-      <div class="flex flex-col items-center gap-2 w-1/3 max-w-xl">
+      <div class="flex flex-col items-center gap-1.5 w-1/3 max-w-xl">
         <div class="flex items-center gap-6 text-textSecondary">
           <button id="player-prev" class="w-9 h-9 rounded-full flex items-center justify-center hover:text-white transition-colors disabled:opacity-30" aria-label="Previous" disabled>
             <i class="fa-solid fa-backward-step"></i>
@@ -451,6 +454,11 @@
         <div id="live-indicator" class="hidden items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
           <span class="text-[10px] font-bold uppercase tracking-widest">Live Streaming</span>
+        </div>
+        <div id="progress-container" class="hidden items-center gap-2 w-full max-w-xs text-[10px] font-mono text-textSecondary">
+          <span id="curr-time">0:00</span>
+          <input id="seek-slider" type="range" min="0" max="100" value="0" step="0.1" class="range-slider flex-1" aria-label="Seek track position">
+          <span id="total-time">0:00</span>
         </div>
       </div>
 
@@ -477,9 +485,17 @@
         <i class="fa-solid fa-chevron-down"></i>
       </button>
       <span class="text-xs font-bold uppercase tracking-widest text-white/70">Now Playing</span>
-      <button id="np-like" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="Like this station" disabled>
-        <i class="fa-regular fa-heart"></i>
-      </button>
+      <div class="flex items-center gap-2">
+        <button id="np-lyrics-btn" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none text-white" aria-label="Lyrics" title="Lyrics">
+          <i class="fa-solid fa-align-left"></i>
+        </button>
+        <button id="np-dsp-btn" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none text-white" aria-label="Audio FX and Equalizer" title="Audio FX & EQ">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+        <button id="np-like" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="Like this station" disabled>
+          <i class="fa-regular fa-heart"></i>
+        </button>
+      </div>
     </div>
 
     <div class="flex-1 flex flex-col items-center justify-center px-8 gap-8 min-h-0">
@@ -499,7 +515,12 @@
       </div>
     </div>
 
-    <div class="px-8 pb-10 space-y-7 flex-shrink-0">
+    <div class="px-8 pb-10 space-y-5 flex-shrink-0">
+      <div id="np-progress-container" class="hidden items-center gap-3 max-w-sm mx-auto text-xs font-mono text-textSecondary">
+        <span id="np-curr-time">0:00</span>
+        <input id="np-seek-slider" type="range" min="0" max="100" value="0" step="0.1" class="range-slider flex-1" aria-label="Seek track position">
+        <span id="np-total-time">0:00</span>
+      </div>
       <div class="flex items-center justify-center gap-8">
         <button id="np-prev" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Previous" disabled>
           <i class="fa-solid fa-backward-step text-xl"></i>
@@ -522,6 +543,161 @@
 
 <audio id="radio-audio" preload="none" crossorigin="anonymous"></audio>
 <audio id="library-audio" preload="none" crossorigin="anonymous"></audio>
+<audio id="library-audio-2" preload="none" crossorigin="anonymous"></audio>
+
+<!-- LYRICS MODAL -->
+<div id="lyrics-modal" class="hidden fixed inset-0 z-[85] flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/75" data-close-modal></div>
+  <div class="relative bg-cardBg border border-borderWhite rounded-3xl w-full max-w-lg p-6 space-y-5 max-h-[85vh] flex flex-col shadow-2xl">
+    <div class="flex items-center justify-between border-b border-borderWhite/40 pb-4 flex-shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-accentRed/20 flex items-center justify-center text-accentRed flex-shrink-0">
+          <i class="fa-solid fa-align-left"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg leading-none">Lyrics</h3>
+          <p id="lyrics-track-label" class="text-xs text-textSecondary mt-1 truncate">Nothing playing</p>
+        </div>
+      </div>
+      <button data-close-modal class="text-textSecondary hover:text-white p-1 flex-shrink-0" aria-label="Close lyrics"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+
+    <div id="lyrics-body" class="flex-1 overflow-y-auto custom-scrollbar text-center px-2 space-y-2">
+      <p class="text-textSecondary text-sm py-10">Play a library track to see its lyrics here.</p>
+    </div>
+
+    <div class="flex-shrink-0 space-y-2 border-t border-borderWhite/40 pt-4">
+      <p class="text-[11px] text-textSecondary">Wrong song matched? Fix the search:</p>
+      <div class="flex gap-2">
+        <input id="lyrics-artist-input" type="text" placeholder="Artist" class="w-1/2 bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm">
+        <input id="lyrics-title-input" type="text" placeholder="Title" class="w-1/2 bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm">
+      </div>
+      <button id="lyrics-retry-btn" class="w-full bg-white/5 hover:bg-white/10 font-semibold py-2 rounded-lg transition-all text-sm">Search again</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUDIO DSP & EQ MODAL -->
+<div id="dsp-modal" class="hidden fixed inset-0 z-[85] flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/75" data-close-modal></div>
+  <div class="relative bg-cardBg border border-borderWhite rounded-3xl w-full max-w-lg p-6 space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+    <div class="flex items-center justify-between border-b border-borderWhite/40 pb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-accentRed/20 flex items-center justify-center text-accentRed">
+          <i class="fa-solid fa-sliders"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-lg leading-none">Audio DSP &amp; EQ</h3>
+          <p class="text-xs text-textSecondary mt-1">Enhance local library playback</p>
+        </div>
+      </div>
+      <button data-close-modal class="text-textSecondary hover:text-white p-1" aria-label="Close DSP settings"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+
+    <!-- 6-BAND EQUALIZER -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-textSecondary">6-Band Equalizer</h4>
+        <span id="eq-active-preset-badge" class="text-xs font-semibold text-accentRed bg-accentRed/10 px-2 py-0.5 rounded-full">Flat</span>
+      </div>
+      <!-- PRESETS PILLS -->
+      <div id="eq-presets-list" class="flex flex-wrap gap-2">
+        <button data-preset="Flat" class="eq-preset-btn active px-3 py-1 rounded-full text-xs font-semibold bg-accentRed text-white transition-all">Flat</button>
+        <button data-preset="Dolby" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Dolby</button>
+        <button data-preset="Bass" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Bass Boost</button>
+        <button data-preset="Vocal" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Vocal Boost</button>
+        <button data-preset="Treble" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Treble Boost</button>
+        <button data-preset="Lofi" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Lofi</button>
+        <button data-preset="Jazz" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Jazz</button>
+        <button data-preset="Rock" class="eq-preset-btn px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-textSecondary hover:bg-white/10 hover:text-white transition-all">Rock</button>
+      </div>
+
+      <!-- 6 MANUAL SLIDERS -->
+      <div class="grid grid-cols-6 gap-2 pt-2 bg-white/5 p-4 rounded-2xl border border-borderWhite/40">
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-0">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="0" aria-label="60Hz gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">60Hz</span>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-1">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="1" aria-label="230Hz gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">230Hz</span>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-2">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="2" aria-label="910Hz gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">910Hz</span>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-3">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="3" aria-label="3.6kHz gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">3.6kHz</span>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-4">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="4" aria-label="14kHz gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">14kHz</span>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-[10px] font-mono text-textSecondary" id="eq-val-5">0dB</span>
+          <input type="range" min="-12" max="12" value="0" step="0.5" class="eq-slider range-slider h-28 -rotate-90 origin-center my-8 w-24" data-band="5" aria-label="Presence gain">
+          <span class="text-[10px] font-mono font-bold text-white/80">Pres</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPATIAL & EFFECT TOGGLES -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- 8D SPATIAL AUDIO -->
+      <div class="p-4 bg-white/5 rounded-2xl border border-borderWhite/40 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-vr-cardboard text-accentRed"></i>
+            <span class="text-xs font-bold">8D Spatial Stage</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-eight-d" class="sr-only peer">
+            <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accentRed"></div>
+          </label>
+        </div>
+        <p class="text-[11px] text-textSecondary leading-normal">Orbiting HRTF panner + convolver room reverb simulation.</p>
+      </div>
+
+      <!-- VOCAL REMOVER -->
+      <div class="p-4 bg-white/5 rounded-2xl border border-borderWhite/40 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-microphone-slash text-accentRed"></i>
+            <span class="text-xs font-bold">Vocal Remover</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-vocal-remover" class="sr-only peer">
+            <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accentRed"></div>
+          </label>
+        </div>
+        <p class="text-[11px] text-textSecondary leading-normal">Phase inversion karaoke mode to attenuate center vocals.</p>
+      </div>
+    </div>
+
+    <!-- CROSSFADE DURATION -->
+    <div class="p-4 bg-white/5 rounded-2xl border border-borderWhite/40 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-arrows-left-right text-accentRed"></i>
+          <span class="text-xs font-bold">Crossfade Duration</span>
+        </div>
+        <span id="crossfade-val-label" class="text-xs font-mono font-bold text-accentRed">Off</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-[10px] font-mono text-textSecondary">0s</span>
+        <input type="range" min="0" max="12" value="0" step="1" id="crossfade-slider" class="range-slider flex-1" aria-label="Crossfade duration seconds">
+        <span class="text-[10px] font-mono text-textSecondary">12s</span>
+      </div>
+      <p class="text-[11px] text-textSecondary leading-normal">Smoothly blend outgoing and incoming library tracks over configured seconds.</p>
+    </div>
+  </div>
+</div>
 
 <!-- SLEEP TIMER MODAL -->
 <div id="sleep-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center p-4">
@@ -593,8 +769,9 @@
       <p class="text-[11px] text-textSecondary">Project Settings → API in your Supabase dashboard. This is the public anon key, safe for client-side use.</p>
     </div>
 
-    <div id="settings-schema-note" class="bg-white/5 border border-borderWhite rounded-lg p-3 text-[11px] text-textSecondary leading-relaxed">
-      First time connecting? Run the SQL schema in your Supabase project's SQL editor — see <code class="text-white/80">SUPABASE_SCHEMA</code> in the page source, or ask MYLO's assistant for it.
+    <div id="settings-schema-note" class="bg-white/5 border border-borderWhite rounded-lg p-3 text-[11px] text-textSecondary leading-relaxed space-y-2">
+      <p><strong>First time connecting?</strong> Run the SQL schema in your Supabase project's SQL editor — see <code class="text-white/80">SUPABASE_SCHEMA</code> in the page source.</p>
+      <p><strong>Storage Setup:</strong> Create a public bucket named <code class="text-white/80">mylo-audio</code> in Storage to enable cross-device audio file sync.</p>
     </div>
 
     <button id="settings-save" class="w-full bg-accentRed hover:bg-accentRedHover font-bold py-2.5 rounded-lg transition-all">Save &amp; reconnect</button>
@@ -664,6 +841,10 @@
   const prevBtn = document.getElementById('player-prev');
   const nextBtn = document.getElementById('player-next');
   const liveIndicator = document.getElementById('live-indicator');
+  const progressContainer = document.getElementById('progress-container');
+  const currTimeEl = document.getElementById('curr-time');
+  const totalTimeEl = document.getElementById('total-time');
+  const seekSlider = document.getElementById('seek-slider');
 
   const npScreen = document.getElementById('now-playing-screen');
   const npTitle = document.getElementById('np-title');
@@ -676,6 +857,10 @@
   const npLike = document.getElementById('np-like');
   const npVolumeSlider = document.getElementById('np-volume-slider');
   const volumeSlider = document.getElementById('volume-slider');
+  const npProgressContainer = document.getElementById('np-progress-container');
+  const npCurrTimeEl = document.getElementById('np-curr-time');
+  const npTotalTimeEl = document.getElementById('np-total-time');
+  const npSeekSlider = document.getElementById('np-seek-slider');
 
   const audioRadio = document.getElementById('radio-audio');
   const audioLibrary = document.getElementById('library-audio');
@@ -806,9 +991,198 @@
       if (countEl) countEl.textContent = '(' + state.liked.size + ')';
       renderStationGrids();
       renderRecentlyPlayed();
+      await maybePull();
       toast('Synced from your MYLO account.');
     } catch (err) {
       console.error('Supabase hydrate failed:', err);
+    }
+  }
+
+  /* ---------------------------------------------------------------
+     SUPABASE BIDIRECTIONAL SYNC & STORAGE HELPERS
+  --------------------------------------------------------------- */
+  let cloudSyncDebounceTimers = { settings: null, playlists: null, library: null };
+
+  function debouncedSyncCloud(kind) {
+    if (!supabase || !currentUser) return;
+    clearTimeout(cloudSyncDebounceTimers[kind]);
+    cloudSyncDebounceTimers[kind] = setTimeout(() => {
+      if (kind === 'settings') pushSettingsToSupabase();
+      else if (kind === 'playlists') pushPlaylistsToSupabase();
+      else if (kind === 'library') pushLibraryToSupabase();
+    }, 800);
+  }
+
+  async function pushSettingsToSupabase() {
+    if (!supabase || !currentUser) return;
+    try {
+      const vol = parseFloat(volumeSlider ? volumeSlider.value : '70') / 100;
+      await supabase.from('settings').upsert({
+        user_id: currentUser.id,
+        volume: vol,
+        crossfade_sec: dspState.crossfadeSec,
+        eq_gains: dspState.eqGains,
+        eq_preset: dspState.eqPreset,
+        eight_d: dspState.eightDEnabled,
+        vocal_remover: dspState.vocalRemoverEnabled,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Supabase settings push failed:', err);
+    }
+  }
+
+  async function pushPlaylistsToSupabase() {
+    if (!supabase || !currentUser) return;
+    try {
+      const rows = state.playlists.map(pl => ({
+        id: pl.id,
+        user_id: currentUser.id,
+        name: pl.name,
+        tracks: pl.trackIds || [],
+        updated_at: new Date().toISOString()
+      }));
+      if (rows.length > 0) {
+        await supabase.from('playlists').upsert(rows);
+      }
+    } catch (err) {
+      console.warn('Supabase playlists push failed:', err);
+    }
+  }
+
+  async function pushLibraryToSupabase() {
+    if (!supabase || !currentUser) return;
+    try {
+      const rows = state.libraryTracks.map(trk => ({
+        id: trk.id,
+        user_id: currentUser.id,
+        title: trk.title,
+        artist: trk.artist,
+        duration: trk.duration || 0,
+        art_b64: trk.artB64 || null,
+        storage_path: trk.storage_path || null,
+        updated_at: new Date().toISOString()
+      }));
+      if (rows.length > 0) {
+        await supabase.from('library').upsert(rows);
+      }
+    } catch (err) {
+      console.warn('Supabase library push failed:', err);
+    }
+  }
+
+  async function uploadNewLocalFile(track) {
+    if (!supabase || !currentUser || !track.file) return;
+    const storagePath = `${currentUser.id}/${track.id}`;
+    try {
+      toast('Uploading track to cloud storage…');
+      const { error: upErr } = await supabase.storage
+        .from('mylo-audio')
+        .upload(storagePath, track.file, { upsert: true, contentType: track.file.type || 'audio/mpeg' });
+
+      if (upErr) throw upErr;
+
+      track.storage_path = storagePath;
+      await dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64, storage_path: storagePath });
+
+      await supabase.from('library').upsert({
+        id: track.id,
+        user_id: currentUser.id,
+        title: track.title,
+        artist: track.artist,
+        duration: track.duration || 0,
+        art_b64: track.artB64 || null,
+        storage_path: storagePath,
+        updated_at: new Date().toISOString()
+      });
+      toast('Track uploaded & synced to cloud.');
+    } catch (err) {
+      console.warn('Audio file cloud upload failed:', err);
+      toast('Cloud upload failed: ' + err.message);
+    }
+  }
+
+  async function maybePull() {
+    if (!supabase || !currentUser) return;
+    try {
+      // 1. Settings Pull / Seed
+      const { data: cloudSettings } = await supabase.from('settings').select('*').eq('user_id', currentUser.id).maybeSingle();
+      if (!cloudSettings) {
+        pushSettingsToSupabase();
+      } else {
+        if (cloudSettings.crossfade_sec !== undefined) dspState.crossfadeSec = parseFloat(cloudSettings.crossfade_sec);
+        if (cloudSettings.eq_gains) dspState.eqGains = cloudSettings.eq_gains;
+        if (cloudSettings.eq_preset) dspState.eqPreset = cloudSettings.eq_preset;
+        if (cloudSettings.eight_d !== undefined) dspState.eightDEnabled = cloudSettings.eight_d;
+        if (cloudSettings.vocal_remover !== undefined) dspState.vocalRemoverEnabled = cloudSettings.vocal_remover;
+        if (cloudSettings.volume !== undefined && volumeSlider) volumeSlider.value = cloudSettings.volume * 100;
+
+        applyEqPreset(dspState.eqPreset);
+        setEightDEnabled(dspState.eightDEnabled);
+        setVocalRemoverEnabled(dspState.vocalRemoverEnabled);
+        renderEqUI();
+      }
+
+      // 2. Playlists Pull / Seed
+      const { data: cloudPlaylists } = await supabase.from('playlists').select('*').eq('user_id', currentUser.id);
+      if (!cloudPlaylists || cloudPlaylists.length === 0) {
+        pushPlaylistsToSupabase();
+      } else {
+        let missingTrackCount = 0;
+        const localTrackIds = new Set(state.libraryTracks.map(t => t.id));
+        state.playlists = cloudPlaylists.map(cp => {
+          const trackIds = cp.tracks || [];
+          trackIds.forEach(id => { if (!localTrackIds.has(id)) missingTrackCount++; });
+          const pl = { id: cp.id, name: cp.name, trackIds: trackIds, createdAt: cp.updated_at };
+          dbPut('playlists', pl);
+          return pl;
+        });
+        renderLibraryUI();
+        renderCustomPlaylistsSidebar();
+        if (missingTrackCount > 0) {
+          toast(`${missingTrackCount} playlist track${missingTrackCount > 1 ? 's' : ''} not found on this device.`);
+        }
+      }
+
+      // 3. Library Pull / Seed & Storage Download
+      const { data: cloudLib } = await supabase.from('library').select('*').eq('user_id', currentUser.id);
+      if (!cloudLib || cloudLib.length === 0) {
+        pushLibraryToSupabase();
+      } else {
+        const localMap = new Map(state.libraryTracks.map(t => [t.id, t]));
+        const missingFromLocal = cloudLib.filter(cl => !localMap.has(cl.id) && cl.storage_path);
+
+        if (missingFromLocal.length > 0) {
+          toast(`Downloading ${missingFromLocal.length} song${missingFromLocal.length > 1 ? 's' : ''} from cloud library…`);
+          for (const item of missingFromLocal) {
+            try {
+              const { data: blob, error: dlErr } = await supabase.storage.from('mylo-audio').download(item.storage_path);
+              if (dlErr) throw dlErr;
+
+              const track = {
+                id: item.id,
+                title: item.title || 'Cloud Track',
+                artist: item.artist || 'Unknown Artist',
+                duration: item.duration || 0,
+                liked: false,
+                artB64: item.artB64 || null,
+                artUrl: item.artB64 || null,
+                storage_path: item.storage_path,
+                file: blob
+              };
+              state.libraryTracks.push(track);
+              await dbPut('files', { id: track.id, blob: blob });
+              await dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: false, artB64: track.artB64, storage_path: track.storage_path });
+            } catch (err) {
+              console.warn(`Failed to download audio for track ${item.id}:`, err);
+            }
+          }
+          renderLibraryUI();
+          toast('Cloud library download complete.');
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase maybePull failed:', err);
     }
   }
 
@@ -1177,6 +1551,215 @@
   }
 
   /* ---------------------------------------------------------------
+     LYRICS API — lrclib.net (primary, free, no key, supports synced
+     LRC lyrics) with lyrics.ovh as a plain-text fallback. Results are
+     cached per track so re-opening the panel never re-fetches.
+  --------------------------------------------------------------- */
+  const LYRICS_CACHE = new Map();
+  let currentLyricsSynced = null;
+  let currentLyricsTrackKey = null;
+
+  function cleanForLyricsSearch(str) {
+    if (!str) return '';
+    return str
+      .replace(/\(.*?\)|\[.*?\]/g, '')
+      .replace(/\b(official\s*(video|audio|lyrics?)?|lyrics?|hd|4k|remaster(ed)?|explicit)\b/gi, '')
+      .replace(/\s*[-–—]\s*(topic)$/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  function parseLRC(lrc) {
+    const lines = lrc.split('\n');
+    const out = [];
+    const timeTag = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+    for (const raw of lines) {
+      const text = raw.replace(timeTag, '').trim();
+      let m;
+      timeTag.lastIndex = 0;
+      while ((m = timeTag.exec(raw))) {
+        const mins = parseInt(m[1], 10), secs = parseInt(m[2], 10);
+        const ms = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) : 0;
+        out.push({ time: mins * 60 + secs + ms / 1000, text: text || '♪' });
+      }
+    }
+    return out.sort((a, b) => a.time - b.time);
+  }
+
+  async function fetchLyrics(artist, title, durationSec) {
+    const a = cleanForLyricsSearch(artist);
+    const t = cleanForLyricsSearch(title);
+    if (!t) return { found: false };
+
+    // 1. lrclib.net exact match (best odds of a correctly synced result)
+    try {
+      const params = new URLSearchParams({ artist_name: a, track_name: t });
+      if (durationSec) params.set('duration', Math.round(durationSec));
+      const res = await fetch('https://lrclib.net/api/get?' + params.toString());
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.syncedLyrics || data.plainLyrics)) {
+          return {
+            found: true,
+            synced: data.syncedLyrics ? parseLRC(data.syncedLyrics) : null,
+            plain: data.plainLyrics || null,
+            source: 'lrclib',
+          };
+        }
+      }
+    } catch (e) { /* fall through to search */ }
+
+    // 2. lrclib.net fuzzy search — take the best-looking hit
+    try {
+      const params = new URLSearchParams({ track_name: t, artist_name: a });
+      const res = await fetch('https://lrclib.net/api/search?' + params.toString());
+      if (res.ok) {
+        const results = await res.json();
+        if (Array.isArray(results) && results.length) {
+          const hit = results.find(r => r.syncedLyrics) || results[0];
+          if (hit && (hit.syncedLyrics || hit.plainLyrics)) {
+            return {
+              found: true,
+              synced: hit.syncedLyrics ? parseLRC(hit.syncedLyrics) : null,
+              plain: hit.plainLyrics || null,
+              source: 'lrclib',
+            };
+          }
+        }
+      }
+    } catch (e) { /* fall through to lyrics.ovh */ }
+
+    // 3. lyrics.ovh — plain text only, last resort
+    if (a) {
+      try {
+        const res = await fetch('https://api.lyrics.ovh/v1/' + encodeURIComponent(a) + '/' + encodeURIComponent(t));
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.lyrics) {
+            return { found: true, synced: null, plain: data.lyrics.trim(), source: 'lyrics.ovh' };
+          }
+        }
+      } catch (e) { /* give up */ }
+    }
+
+    return { found: false };
+  }
+
+  function renderLyricsBody(result) {
+    const body = document.getElementById('lyrics-body');
+    if (!body) return;
+    if (!result || !result.found) {
+      body.innerHTML = '<p class="text-textSecondary text-sm py-10">No lyrics found for this track. Try fixing the artist/title below.</p>';
+      return;
+    }
+    if (result.synced && result.synced.length) {
+      body.innerHTML = result.synced.map((line, i) =>
+        `<p class="lyrics-line" data-time="${line.time}" data-idx="${i}">${escapeHtml(line.text)}</p>`
+      ).join('');
+    } else if (result.plain) {
+      body.innerHTML = result.plain.split('\n').map(line =>
+        `<p class="lyrics-line plain">${escapeHtml(line) || '&nbsp;'}</p>`
+      ).join('');
+    } else {
+      body.innerHTML = '<p class="text-textSecondary text-sm py-10">No lyrics found for this track.</p>';
+    }
+  }
+
+  async function loadLyricsForTrack(artist, title, durationSec, cacheKey) {
+    const body = document.getElementById('lyrics-body');
+    currentLyricsSynced = null;
+    currentLyricsTrackKey = cacheKey;
+    if (LYRICS_CACHE.has(cacheKey)) {
+      const cached = LYRICS_CACHE.get(cacheKey);
+      currentLyricsSynced = cached.synced;
+      renderLyricsBody(cached);
+      return;
+    }
+    if (body) body.innerHTML = '<div class="flex justify-center py-10"><i class="fa-solid fa-spinner fa-spin text-textSecondary"></i></div>';
+    const result = await fetchLyrics(artist, title, durationSec);
+    LYRICS_CACHE.set(cacheKey, result);
+    if (currentLyricsTrackKey === cacheKey) {
+      currentLyricsSynced = result.synced;
+      renderLyricsBody(result);
+    }
+  }
+
+  function openLyricsModal() {
+    const modal = document.getElementById('lyrics-modal');
+    const label = document.getElementById('lyrics-track-label');
+    const artistInput = document.getElementById('lyrics-artist-input');
+    const titleInput = document.getElementById('lyrics-title-input');
+    if (!modal) return;
+
+    if (state.activeEngine === 'library' && state.currentLibraryTrackIdx >= 0) {
+      const track = state.libraryTracks[state.currentLibraryTrackIdx];
+      if (track) {
+        if (label) label.textContent = track.artist + ' — ' + track.title;
+        if (artistInput) artistInput.value = track.artist || '';
+        if (titleInput) titleInput.value = track.title || '';
+        loadLyricsForTrack(track.artist, track.title, track.duration, 'lib:' + track.id);
+      }
+    } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
+      const v = getVideo(state.currentVideoId);
+      if (v) {
+        const guessArtist = v.channel || '';
+        const guessTitle = v.title || '';
+        if (label) label.textContent = guessArtist + ' — ' + guessTitle;
+        if (artistInput) artistInput.value = guessArtist;
+        if (titleInput) titleInput.value = guessTitle;
+        loadLyricsForTrack(guessArtist, guessTitle, null, 'yt:' + v.id);
+      }
+    } else {
+      if (label) label.textContent = 'Nothing playing';
+      if (artistInput) artistInput.value = '';
+      if (titleInput) titleInput.value = '';
+      currentLyricsSynced = null;
+      currentLyricsTrackKey = null;
+      const body = document.getElementById('lyrics-body');
+      if (body) body.innerHTML = '<p class="text-textSecondary text-sm py-10">Lyrics aren\'t available for live radio. Play a library track or a video instead.</p>';
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function updateLyricsHighlight(currentTime) {
+    if (!currentLyricsSynced || !currentLyricsSynced.length) return;
+    const modal = document.getElementById('lyrics-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    let activeIdx = -1;
+    for (let i = 0; i < currentLyricsSynced.length; i++) {
+      if (currentLyricsSynced[i].time <= currentTime) activeIdx = i;
+      else break;
+    }
+    const body = document.getElementById('lyrics-body');
+    if (!body) return;
+    const lines = body.querySelectorAll('.lyrics-line');
+    lines.forEach((el, i) => {
+      const isActive = i === activeIdx;
+      el.classList.toggle('active', isActive);
+      if (isActive) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
+
+  const npLyricsBtn = document.getElementById('np-lyrics-btn');
+  if (npLyricsBtn) npLyricsBtn.addEventListener('click', openLyricsModal);
+
+  const lyricsRetryBtn = document.getElementById('lyrics-retry-btn');
+  if (lyricsRetryBtn) {
+    lyricsRetryBtn.addEventListener('click', () => {
+      const artistInput = document.getElementById('lyrics-artist-input');
+      const titleInput = document.getElementById('lyrics-title-input');
+      const label = document.getElementById('lyrics-track-label');
+      const artist = artistInput ? artistInput.value.trim() : '';
+      const title = titleInput ? titleInput.value.trim() : '';
+      if (!title) return;
+      if (label) label.textContent = artist + ' — ' + title;
+      const key = (currentLyricsTrackKey || 'manual:' + Date.now());
+      LYRICS_CACHE.delete(key);
+      loadLyricsForTrack(artist, title, null, key);
+    });
+  }
+
+  /* ---------------------------------------------------------------
      STATION & VIDEO DATA SETS
   --------------------------------------------------------------- */
   const STATIONS = [
@@ -1373,8 +1956,10 @@
       await dbPut('files', { id, blob: file });
       await dbPut('meta', { id, title, artist, duration: 0, liked: false, artB64: null });
       extractArtwork(track);
+      uploadNewLocalFile(track);
     }
 
+    debouncedSyncCloud('library');
     renderLibraryUI();
     toast(`Added ${validFiles.length} song${validFiles.length > 1 ? 's' : ''} to library.`);
   }
@@ -1421,7 +2006,7 @@
   function updateNowPlayingTheme() {
     const npBg = document.getElementById('np-bg');
     if (!npBg) return;
-    if (state.activeEngine === 'library' && vizColors) {
+    if (vizColors) {
       const { r, g, b } = vizColors;
       npBg.className = 'absolute inset-0 transition-all duration-700';
       npBg.style.background = `radial-gradient(circle at 50% 30%, rgba(${r},${g},${b},0.85), rgba(10,10,10,0.95))`;
@@ -1429,16 +2014,49 @@
   }
 
   /* ---------------------------------------------------------------
-     WEB AUDIO ANALYSER & 40-BAR CANVAS VISUALIZER
+     WEB AUDIO ANALYSER, DSP GRAPH, & 40-BAR CANVAS VISUALIZER
   --------------------------------------------------------------- */
+  const EQ_PRESETS = {
+    'Flat': [0, 0, 0, 0, 0, 0],
+    'Dolby': [3, 2, 0, 2, 4, 3],
+    'Bass': [6, 4, 1, 0, 0, 0],
+    'Vocal': [-2, 1, 4, 3, 1, -1],
+    'Treble': [0, 0, 0, 2, 5, 7],
+    'Lofi': [4, 2, -2, -3, -5, -8],
+    'Jazz': [3, 2, 1, 2, 2, 3],
+    'Rock': [5, 3, -1, 1, 3, 5],
+  };
+  const EQ_FREQS = [60, 230, 910, 3600, 14000, 16000];
+
   let audioCtx = null;
   let analyser = null;
   let radioSourceConnected = false;
   let librarySourceConnected = false;
   let radioSrcNode = null;
-  let librarySrcNode = null;
   let vizRafId = null;
   let isTabVisible = true;
+
+  let audioLibrary1 = null;
+  let audioLibrary2 = null;
+  let activeLibAudioIdx = 1;
+
+  let librarySrcNode1 = null, librarySrcNode2 = null;
+  let libraryGainNode1 = null, libraryGainNode2 = null;
+
+  let eqNodes = [];
+  let vocalBypassGain = null, vocalEffectGain = null, vocalSplitter = null, vocalInverter = null, vocalMerger = null, vocalOutput = null;
+  let masterGain = null;
+  let eightDBypassGain = null, eightDEffectGain = null, eightDPanner = null, eightDConvolver = null, eightDOutput = null;
+  let eightDAngle = 0, eightDRafId = null;
+  let isCrossfading = false;
+
+  const dspState = {
+    eqPreset: 'Flat',
+    eqGains: [0, 0, 0, 0, 0, 0],
+    eightDEnabled: false,
+    vocalRemoverEnabled: false,
+    crossfadeSec: 0,
+  };
 
   function initAudioEngine() {
     if (!audioCtx) {
@@ -1454,28 +2072,290 @@
     }
   }
 
+  function setupDspGraph() {
+    initAudioEngine();
+    if (!audioCtx || librarySourceConnected) return;
+
+    try {
+      if (!audioLibrary1) audioLibrary1 = document.getElementById('library-audio');
+      if (!audioLibrary2) audioLibrary2 = document.getElementById('library-audio-2');
+
+      if (!audioLibrary1 || !audioLibrary2) return;
+
+      librarySrcNode1 = audioCtx.createMediaElementSource(audioLibrary1);
+      librarySrcNode2 = audioCtx.createMediaElementSource(audioLibrary2);
+
+      libraryGainNode1 = audioCtx.createGain();
+      libraryGainNode2 = audioCtx.createGain();
+
+      libraryGainNode1.gain.value = 1;
+      libraryGainNode2.gain.value = 0;
+
+      librarySrcNode1.connect(libraryGainNode1);
+      librarySrcNode2.connect(libraryGainNode2);
+
+      // 6-Band BiquadFilter Chain
+      eqNodes = EQ_FREQS.map((freq, i) => {
+        const filter = audioCtx.createBiquadFilter();
+        if (i === 0) filter.type = 'lowshelf';
+        else if (i === 4 || i === 5) filter.type = 'highshelf';
+        else filter.type = 'peaking';
+        filter.frequency.value = freq;
+        filter.Q.value = 1.0;
+        filter.gain.value = dspState.eqGains[i] || 0;
+        return filter;
+      });
+
+      for (let i = 0; i < eqNodes.length - 1; i++) {
+        eqNodes[i].connect(eqNodes[i + 1]);
+      }
+
+      libraryGainNode1.connect(eqNodes[0]);
+      libraryGainNode2.connect(eqNodes[0]);
+
+      const lastEqNode = eqNodes[eqNodes.length - 1];
+
+      // Vocal Remover Stage
+      vocalBypassGain = audioCtx.createGain();
+      vocalEffectGain = audioCtx.createGain();
+      vocalSplitter = audioCtx.createChannelSplitter(2);
+      vocalInverter = audioCtx.createGain();
+      vocalInverter.gain.value = -1;
+      vocalMerger = audioCtx.createChannelMerger(2);
+      vocalOutput = audioCtx.createGain();
+
+      vocalBypassGain.gain.value = dspState.vocalRemoverEnabled ? 0 : 1;
+      vocalEffectGain.gain.value = dspState.vocalRemoverEnabled ? 1 : 0;
+
+      lastEqNode.connect(vocalBypassGain);
+      lastEqNode.connect(vocalSplitter);
+
+      vocalSplitter.connect(vocalMerger, 0, 0); // L -> L
+      vocalSplitter.connect(vocalInverter, 1);   // R -> Inverter
+      vocalInverter.connect(vocalMerger, 0, 1);  // Inverted R -> R
+
+      vocalBypassGain.connect(vocalOutput);
+      vocalMerger.connect(vocalEffectGain);
+      vocalEffectGain.connect(vocalOutput);
+
+      // Analyser & Master Gain
+      masterGain = audioCtx.createGain();
+      vocalOutput.connect(analyser);
+      analyser.connect(masterGain);
+
+      // 8D Spatial Stage
+      eightDBypassGain = audioCtx.createGain();
+      eightDEffectGain = audioCtx.createGain();
+      eightDPanner = audioCtx.createPanner();
+      eightDPanner.panningModel = 'HRTF';
+      eightDPanner.distanceModel = 'inverse';
+
+      eightDConvolver = audioCtx.createConvolver();
+      eightDConvolver.buffer = createProceduralImpulseResponse(audioCtx);
+
+      eightDOutput = audioCtx.createGain();
+
+      eightDBypassGain.gain.value = dspState.eightDEnabled ? 0 : 1;
+      eightDEffectGain.gain.value = dspState.eightDEnabled ? 1 : 0;
+
+      masterGain.connect(eightDBypassGain);
+      masterGain.connect(eightDPanner);
+      eightDPanner.connect(eightDConvolver);
+      eightDConvolver.connect(eightDEffectGain);
+
+      eightDBypassGain.connect(eightDOutput);
+      eightDEffectGain.connect(eightDOutput);
+
+      eightDOutput.connect(audioCtx.destination);
+
+      librarySourceConnected = true;
+
+      if (dspState.eightDEnabled) {
+        startEightDOrbit();
+      }
+    } catch (err) {
+      console.warn('DSP graph setup guard:', err);
+    }
+  }
+
+  function createProceduralImpulseResponse(ctx, duration = 1.2, decay = 2.0) {
+    const rate = ctx.sampleRate;
+    const length = Math.floor(rate * duration);
+    const impulse = ctx.createBuffer(2, length, rate);
+    const L = impulse.getChannelData(0);
+    const R = impulse.getChannelData(1);
+    for (let i = 0; i < length; i++) {
+      const n = i / length;
+      const factor = Math.pow(1 - n, decay);
+      L[i] = (Math.random() * 2 - 1) * factor;
+      R[i] = (Math.random() * 2 - 1) * factor;
+    }
+    return impulse;
+  }
+
   function connectActiveAudioToAnalyser() {
     initAudioEngine();
     if (!audioCtx || !analyser) return;
 
     try {
-      if (state.activeEngine === 'library' && audioLibrary) {
-        if (!librarySourceConnected) {
-          librarySrcNode = audioCtx.createMediaElementSource(audioLibrary);
-          librarySrcNode.connect(analyser);
-          analyser.connect(audioCtx.destination);
-          librarySourceConnected = true;
-        }
-      } else if (state.activeEngine === 'radio' && audioRadio) {
-        if (!radioSourceConnected) {
-          radioSrcNode = audioCtx.createMediaElementSource(audioRadio);
-          radioSrcNode.connect(analyser);
-          analyser.connect(audioCtx.destination);
-          radioSourceConnected = true;
-        }
+      if (state.activeEngine === 'library') {
+        setupDspGraph();
       }
+      // Deliberately NOT connecting radio-audio here. Public Icecast/Shoutcast
+      // streams virtually never send Access-Control-Allow-Origin headers, so
+      // createMediaElementSource() on a live radio stream permanently mutes
+      // it via the browser's CORS-taint protection — the element keeps
+      // "playing" (currentTime advances, no error fires) but produces silent
+      // output for the rest of the session. The visualizer already falls
+      // back to a synthetic animation when there's no real analyser signal
+      // (see drawVisualizerCanvas's hasRealSignal check), so radio loses
+      // nothing visually by skipping this — only local library files, which
+      // are same-origin blob: URLs and safe to connect, get real FFT data.
     } catch (e) {
       console.warn('Audio node connection guard:', e);
+    }
+  }
+
+  function setEightDEnabled(enabled, rampTime = 0.35) {
+    dspState.eightDEnabled = !!enabled;
+    if (eightDBypassGain && eightDEffectGain && audioCtx) {
+      const now = audioCtx.currentTime;
+      eightDBypassGain.gain.cancelScheduledValues(now);
+      eightDEffectGain.gain.cancelScheduledValues(now);
+      eightDBypassGain.gain.linearRampToValueAtTime(enabled ? 0 : 1, now + rampTime);
+      eightDEffectGain.gain.linearRampToValueAtTime(enabled ? 1 : 0, now + rampTime);
+    }
+    if (enabled) startEightDOrbit();
+    else stopEightDOrbit();
+
+    const chk = document.getElementById('toggle-eight-d');
+    if (chk) chk.checked = enabled;
+    saveDspSettings();
+  }
+
+  function startEightDOrbit() {
+    if (eightDRafId) return;
+    function orbit() {
+      if (!dspState.eightDEnabled) { eightDRafId = null; return; }
+      eightDAngle += 0.035;
+      const x = Math.cos(eightDAngle) * 3;
+      const z = Math.sin(eightDAngle) * 3;
+      if (eightDPanner) {
+        if (eightDPanner.positionX) {
+          eightDPanner.positionX.value = x;
+          eightDPanner.positionZ.value = z;
+        } else if (eightDPanner.setPosition) {
+          eightDPanner.setPosition(x, 0, z);
+        }
+      }
+      eightDRafId = requestAnimationFrame(orbit);
+    }
+    orbit();
+  }
+
+  function stopEightDOrbit() {
+    if (eightDRafId) {
+      cancelAnimationFrame(eightDRafId);
+      eightDRafId = null;
+    }
+  }
+
+  function setVocalRemoverEnabled(enabled, rampTime = 0.35) {
+    dspState.vocalRemoverEnabled = !!enabled;
+    if (vocalBypassGain && vocalEffectGain && audioCtx) {
+      const now = audioCtx.currentTime;
+      vocalBypassGain.gain.cancelScheduledValues(now);
+      vocalEffectGain.gain.cancelScheduledValues(now);
+      vocalBypassGain.gain.linearRampToValueAtTime(enabled ? 0 : 1, now + rampTime);
+      vocalEffectGain.gain.linearRampToValueAtTime(enabled ? 1 : 0, now + rampTime);
+    }
+    const chk = document.getElementById('toggle-vocal-remover');
+    if (chk) chk.checked = enabled;
+    saveDspSettings();
+  }
+
+  function applyEqPreset(name) {
+    const gains = EQ_PRESETS[name] || EQ_PRESETS['Flat'];
+    dspState.eqPreset = name;
+    dspState.eqGains = [...gains];
+
+    if (eqNodes && eqNodes.length && audioCtx) {
+      const now = audioCtx.currentTime;
+      gains.forEach((g, i) => {
+        if (eqNodes[i]) eqNodes[i].gain.setValueAtTime(g, now);
+      });
+    }
+
+    renderEqUI();
+    saveDspSettings();
+  }
+
+  function setEqBand(bandIdx, value) {
+    const val = parseFloat(value);
+    dspState.eqGains[bandIdx] = val;
+    dspState.eqPreset = 'Custom';
+
+    if (eqNodes[bandIdx] && audioCtx) {
+      eqNodes[bandIdx].gain.setValueAtTime(val, audioCtx.currentTime);
+    }
+
+    renderEqUI();
+    saveDspSettings();
+  }
+
+  function setCrossfadeDuration(sec) {
+    dspState.crossfadeSec = parseFloat(sec);
+    renderEqUI();
+    saveDspSettings();
+  }
+
+  function renderEqUI() {
+    document.querySelectorAll('.eq-preset-btn').forEach(btn => {
+      const isThis = btn.dataset.preset === dspState.eqPreset;
+      btn.classList.toggle('bg-accentRed', isThis);
+      btn.classList.toggle('text-white', isThis);
+      btn.classList.toggle('bg-white/5', !isThis);
+      btn.classList.toggle('text-textSecondary', !isThis);
+    });
+
+    const badge = document.getElementById('eq-active-preset-badge');
+    if (badge) badge.textContent = dspState.eqPreset;
+
+    dspState.eqGains.forEach((g, i) => {
+      const slider = document.querySelector(`.eq-slider[data-band="${i}"]`);
+      const valEl = document.getElementById(`eq-val-${i}`);
+      if (slider) slider.value = g;
+      if (valEl) valEl.textContent = (g > 0 ? '+' : '') + g + 'dB';
+    });
+
+    const xSlider = document.getElementById('crossfade-slider');
+    const xLabel = document.getElementById('crossfade-val-label');
+    if (xSlider) xSlider.value = dspState.crossfadeSec;
+    if (xLabel) xLabel.textContent = dspState.crossfadeSec === 0 ? 'Off' : (dspState.crossfadeSec + 's');
+  }
+
+  async function saveDspSettings() {
+    try {
+      await dbPut('meta', { id: 'dsp_settings', data: { ...dspState } });
+      debouncedSyncCloud('settings');
+    } catch (e) {
+      console.warn('DSP settings save failed:', e);
+    }
+  }
+
+  async function loadDspSettings() {
+    try {
+      const row = await dbGet('meta', 'dsp_settings');
+      if (row && row.data) {
+        Object.assign(dspState, row.data);
+      }
+      renderEqUI();
+      const chk8D = document.getElementById('toggle-eight-d');
+      if (chk8D) chk8D.checked = dspState.eightDEnabled;
+      const chkVocal = document.getElementById('toggle-vocal-remover');
+      if (chkVocal) chkVocal.checked = dspState.vocalRemoverEnabled;
+    } catch (e) {
+      console.warn('DSP settings load failed:', e);
     }
   }
 
@@ -1504,28 +2384,37 @@
     const ctx = canvas.getContext('2d');
     const W = canvas.width = canvas.clientWidth;
     const H = canvas.height = canvas.clientHeight;
+    if (W === 0 || H === 0) return;
     ctx.clearRect(0, 0, W, H);
 
     const gap = (W / barCount) * 0.25;
     const barW = (W - (barCount - 1) * gap) / barCount;
 
     let dataArray = new Uint8Array(barCount);
+    let hasRealSignal = false;
 
     if (state.playing && (state.activeEngine === 'radio' || state.activeEngine === 'library') && analyser) {
       const bins = analyser.frequencyBinCount;
       const fullData = new Uint8Array(bins);
       analyser.getByteFrequencyData(fullData);
-      for (let i = 0; i < barCount; i++) {
-        const binIdx = Math.floor(i * bins / barCount);
-        dataArray[i] = fullData[binIdx] || 0;
+      for (let i = 0; i < bins; i++) {
+        if (fullData[i] > 0) { hasRealSignal = true; break; }
       }
-    } else if (state.playing) {
+      if (hasRealSignal) {
+        for (let i = 0; i < barCount; i++) {
+          const binIdx = Math.floor(i * bins / barCount);
+          dataArray[i] = fullData[binIdx] || 0;
+        }
+      }
+    }
+
+    if (state.playing && !hasRealSignal) {
       const time = Date.now() / 120;
       for (let i = 0; i < barCount; i++) {
         const val = Math.sin(time + i * 0.3) * 0.35 + Math.cos(time * 0.8 - i * 0.2) * 0.35 + 0.45;
         dataArray[i] = Math.floor(val * 210 + Math.random() * 35);
       }
-    } else {
+    } else if (!state.playing) {
       for (let i = 0; i < barCount; i++) dataArray[i] = 6;
     }
 
@@ -1581,49 +2470,134 @@
     state.activeEngine = 'radio';
   }
 
-  function playLibraryTrack(idx) {
+  function playLibraryTrack(idx, forceDirect = false) {
     if (idx < 0 || idx >= state.libraryTracks.length) return;
     stopRadioForLocalPlayback();
     state.currentLibraryTrackIdx = idx;
     const track = state.libraryTracks[idx];
 
-    if (track.file) {
-      if (audioLibrary.src && audioLibrary.src.startsWith('blob:')) URL.revokeObjectURL(audioLibrary.src);
-      audioLibrary.src = URL.createObjectURL(track.file);
-    }
-    audioLibrary.volume = parseInt(volumeSlider ? volumeSlider.value : '70', 10) / 100;
+    initAudioEngine();
+    setupDspGraph();
 
-    audioLibrary.onloadedmetadata = () => {
-      track.duration = audioLibrary.duration;
-      dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
-      renderLibraryUI();
-    };
+    if (!audioLibrary1) audioLibrary1 = document.getElementById('library-audio');
+    if (!audioLibrary2) audioLibrary2 = document.getElementById('library-audio-2');
 
-    audioLibrary.onended = () => {
-      if (state.currentLibraryTrackIdx + 1 < state.libraryTracks.length) {
-        playLibraryTrack(state.currentLibraryTrackIdx + 1);
-      } else {
-        state.playing = false;
+    const currVol = parseInt(volumeSlider ? volumeSlider.value : '70', 10) / 100;
+    const activeAudio = activeLibAudioIdx === 1 ? audioLibrary1 : audioLibrary2;
+    const activeGain = activeLibAudioIdx === 1 ? libraryGainNode1 : libraryGainNode2;
+    const idleAudio = activeLibAudioIdx === 1 ? audioLibrary2 : audioLibrary1;
+    const idleGain = activeLibAudioIdx === 1 ? libraryGainNode2 : libraryGainNode1;
+
+    const crossSec = dspState.crossfadeSec;
+
+    if (crossSec > 0 && state.playing && !forceDirect && activeAudio && activeAudio.src && !activeAudio.paused && track.file) {
+      isCrossfading = true;
+      if (idleAudio.src && idleAudio.src.startsWith('blob:')) URL.revokeObjectURL(idleAudio.src);
+      idleAudio.src = URL.createObjectURL(track.file);
+
+      idleAudio.onloadedmetadata = () => {
+        track.duration = idleAudio.duration;
+        dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+        renderLibraryUI();
+      };
+
+      idleAudio.ontimeupdate = () => handleLibraryTimeUpdate(idleAudio);
+      idleAudio.onended = () => handleLibraryTrackEnd();
+
+      const now = audioCtx ? audioCtx.currentTime : 0;
+      if (idleGain && activeGain && audioCtx) {
+        idleGain.gain.cancelScheduledValues(now);
+        activeGain.gain.cancelScheduledValues(now);
+
+        idleGain.gain.setValueAtTime(0, now);
+        idleGain.gain.linearRampToValueAtTime(1, now + crossSec);
+        activeGain.gain.linearRampToValueAtTime(0, now + crossSec);
+      }
+
+      idleAudio.volume = currVol;
+      idleAudio.play().catch(() => {});
+
+      setTimeout(() => {
+        if (activeAudio) activeAudio.pause();
+        activeLibAudioIdx = activeLibAudioIdx === 1 ? 2 : 1;
+        isCrossfading = false;
         renderSourceAwarePlayerBar();
         renderLibraryUI();
-      }
-    };
+      }, crossSec * 1000);
 
+    } else if (track.file) {
+      isCrossfading = false;
+      if (activeAudio.src && activeAudio.src.startsWith('blob:')) URL.revokeObjectURL(activeAudio.src);
+      activeAudio.src = URL.createObjectURL(track.file);
+      activeAudio.volume = currVol;
+
+      if (activeGain && idleGain && audioCtx) {
+        const now = audioCtx.currentTime;
+        activeGain.gain.setValueAtTime(1, now);
+        idleGain.gain.setValueAtTime(0, now);
+      }
+      if (idleAudio) idleAudio.pause();
+
+      activeAudio.onloadedmetadata = () => {
+        track.duration = activeAudio.duration;
+        dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+        renderLibraryUI();
+      };
+
+      activeAudio.ontimeupdate = () => handleLibraryTimeUpdate(activeAudio);
+      activeAudio.onended = () => handleLibraryTrackEnd();
+
+      const p = activeAudio.play();
+      if (p && p.catch) p.catch(() => toast('Playback error. Tap play to retry.'));
+    }
+
+    state.playing = true;
     extractArtwork(track).then(() => {
       updateAdaptiveColor(track.artUrl);
       renderSourceAwarePlayerBar();
       renderLibraryUI();
     });
 
-    const p = audioLibrary.play();
-    if (p && p.catch) {
-      p.catch(() => toast('Playback error. Tap play to retry.'));
-    }
-    state.playing = true;
-    connectActiveAudioToAnalyser();
     renderSourceAwarePlayerBar();
     renderLibraryUI();
     startVisualizer();
+  }
+
+  function handleLibraryTimeUpdate(audioEl) {
+    if (state.activeEngine !== 'library') return;
+    if (audioEl.duration && audioEl.currentTime) {
+      if (seekSlider) {
+        seekSlider.max = audioEl.duration;
+        seekSlider.value = audioEl.currentTime;
+      }
+      if (npSeekSlider) {
+        npSeekSlider.max = audioEl.duration;
+        npSeekSlider.value = audioEl.currentTime;
+      }
+      if (currTimeEl) currTimeEl.textContent = formatTime(audioEl.currentTime);
+      if (totalTimeEl) totalTimeEl.textContent = formatTime(audioEl.duration);
+      if (npCurrTimeEl) npCurrTimeEl.textContent = formatTime(audioEl.currentTime);
+      if (npTotalTimeEl) npTotalTimeEl.textContent = formatTime(audioEl.duration);
+      updateLyricsHighlight(audioEl.currentTime);
+
+      const crossSec = dspState.crossfadeSec;
+      if (crossSec > 0 && !isCrossfading && (audioEl.duration - audioEl.currentTime <= crossSec)) {
+        if (state.currentLibraryTrackIdx + 1 < state.libraryTracks.length) {
+          playLibraryTrack(state.currentLibraryTrackIdx + 1);
+        }
+      }
+    }
+  }
+
+  function handleLibraryTrackEnd() {
+    if (isCrossfading) return;
+    if (state.currentLibraryTrackIdx + 1 < state.libraryTracks.length) {
+      playLibraryTrack(state.currentLibraryTrackIdx + 1, true);
+    } else {
+      state.playing = false;
+      renderSourceAwarePlayerBar();
+      renderLibraryUI();
+    }
   }
 
   function toggleLibraryPlayPause() {
@@ -1633,14 +2607,18 @@
     }
     if (state.currentLibraryTrackIdx < 0) return;
 
+    const activeAudio = activeLibAudioIdx === 1 ? audioLibrary1 : audioLibrary2;
     if (state.playing) {
-      audioLibrary.pause();
+      if (activeAudio) activeAudio.pause();
       state.playing = false;
     } else {
       stopRadioForLocalPlayback();
       initAudioEngine();
-      const p = audioLibrary.play();
-      if (p && p.catch) p.catch(() => toast('Playback error. Tap play to retry.'));
+      setupDspGraph();
+      if (activeAudio) {
+        const p = activeAudio.play();
+        if (p && p.catch) p.catch(() => toast('Playback error. Tap play to retry.'));
+      }
       state.playing = true;
       startVisualizer();
     }
@@ -1651,6 +2629,14 @@
   function togglePlayPause() {
     if (state.activeEngine === 'library') {
       toggleLibraryPlayPause();
+    } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
+      state.playing = !state.playing;
+      const ytFrame = document.getElementById('yt-frame');
+      if (ytFrame && ytFrame.contentWindow) {
+        const cmd = state.playing ? 'playVideo' : 'pauseVideo';
+        ytFrame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: cmd, args: '' }), '*');
+      }
+      renderSourceAwarePlayerBar();
     } else if (state.activeEngine === 'radio' || state.currentStationId) {
       if (!state.currentStationId) return;
       if (state.playing) {
@@ -1804,6 +2790,8 @@
           liveIndicator.classList.toggle('hidden', !isPlaying);
           liveIndicator.classList.toggle('flex', isPlaying);
         }
+        if (progressContainer) progressContainer.classList.add('hidden');
+        if (npProgressContainer) npProgressContainer.classList.add('hidden');
 
         if (npTitle) npTitle.textContent = station.name;
         if (npSubtitle) npSubtitle.textContent = station.genre + (station.dj ? ' · ' + station.dj : '');
@@ -1850,6 +2838,14 @@
           liveIndicator.classList.add('hidden');
           liveIndicator.classList.remove('flex');
         }
+        if (progressContainer) {
+          progressContainer.classList.remove('hidden');
+          progressContainer.classList.add('flex');
+        }
+        if (npProgressContainer) {
+          npProgressContainer.classList.remove('hidden');
+          npProgressContainer.classList.add('flex');
+        }
 
         if (npTitle) npTitle.textContent = track.title;
         if (npSubtitle) npSubtitle.textContent = track.artist || 'Local Track';
@@ -1887,11 +2883,13 @@
           playerArt.innerHTML = `<img src="${thumb}" class="w-full h-full object-cover" alt=""/>`;
         }
         if (playBtn) playBtn.disabled = false;
-        if (playIcon) playIcon.className = 'fa-brands fa-youtube text-red-600 text-lg';
+        if (playIcon) playIcon.className = isPlaying ? 'fa-solid fa-pause' : 'fa-brands fa-youtube text-red-600 text-lg';
         if (liveIndicator) {
           liveIndicator.classList.toggle('hidden', !v.live);
           liveIndicator.classList.toggle('flex', v.live);
         }
+        if (progressContainer) progressContainer.classList.add('hidden');
+        if (npProgressContainer) npProgressContainer.classList.add('hidden');
 
         if (npTitle) npTitle.textContent = v.title;
         if (npSubtitle) npSubtitle.textContent = v.channel + ' · YouTube';
@@ -1906,7 +2904,7 @@
         if (npPlaypause) {
           npPlaypause.disabled = false;
           const icon = npPlaypause.querySelector('i');
-          if (icon) icon.className = 'fa-brands fa-youtube text-red-600 text-2xl';
+          if (icon) icon.className = isPlaying ? 'fa-solid fa-pause' : 'fa-brands fa-youtube text-red-600 text-2xl';
         }
         if (npLike) {
           npLike.disabled = false;
@@ -1929,6 +2927,8 @@
     if (playBtn) playBtn.disabled = true;
     if (playIcon) playIcon.className = 'fa-solid fa-play ml-0.5';
     if (liveIndicator) liveIndicator.classList.add('hidden');
+    if (progressContainer) progressContainer.classList.add('hidden');
+    if (npProgressContainer) npProgressContainer.classList.add('hidden');
 
     if (npTitle) npTitle.textContent = 'Nothing playing';
     if (npSubtitle) npSubtitle.textContent = 'Pick a station or track to get started';
@@ -1968,6 +2968,48 @@
 
   const npCloseBtn = document.getElementById('np-close');
   if (npCloseBtn) npCloseBtn.addEventListener('click', closeNowPlaying);
+
+  const npDspBtn = document.getElementById('np-dsp-btn');
+  if (npDspBtn) {
+    npDspBtn.addEventListener('click', () => {
+      const modal = document.getElementById('dsp-modal');
+      if (modal) modal.classList.remove('hidden');
+    });
+  }
+
+  document.querySelectorAll('.eq-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyEqPreset(btn.dataset.preset);
+    });
+  });
+
+  document.querySelectorAll('.eq-slider').forEach(slider => {
+    slider.addEventListener('input', () => {
+      const band = parseInt(slider.dataset.band, 10);
+      setEqBand(band, slider.value);
+    });
+  });
+
+  const toggleEightDEl = document.getElementById('toggle-eight-d');
+  if (toggleEightDEl) {
+    toggleEightDEl.addEventListener('change', (e) => {
+      setEightDEnabled(e.target.checked);
+    });
+  }
+
+  const toggleVocalEl = document.getElementById('toggle-vocal-remover');
+  if (toggleVocalEl) {
+    toggleVocalEl.addEventListener('change', (e) => {
+      setVocalRemoverEnabled(e.target.checked);
+    });
+  }
+
+  const crossfadeSliderEl = document.getElementById('crossfade-slider');
+  if (crossfadeSliderEl) {
+    crossfadeSliderEl.addEventListener('input', (e) => {
+      setCrossfadeDuration(e.target.value);
+    });
+  }
 
   if (npPlaypause) npPlaypause.addEventListener('click', togglePlayPause);
   if (npLike) {
@@ -2282,6 +3324,12 @@
         await dbDelete('files', id);
         await dbDelete('meta', id);
         state.libraryTracks.splice(trackIdx, 1);
+        for (const pl of state.playlists) {
+          if (pl.trackIds && pl.trackIds.includes(id)) {
+            pl.trackIds = pl.trackIds.filter(tId => tId !== id);
+            await dbPut('playlists', pl);
+          }
+        }
         if (state.currentLibraryTrackIdx === trackIdx) {
           state.currentLibraryTrackIdx = -1;
           if (audioLibrary) audioLibrary.pause();
@@ -2291,6 +3339,7 @@
         }
         renderLibraryUI();
         renderSourceAwarePlayerBar();
+        renderCustomPlaylistsSidebar();
         toast('Track deleted');
       });
     });
@@ -2764,7 +3813,7 @@
       state.playing = false;
     }
 
-    if (ytFrame) ytFrame.src = `https://www.youtube-nocookie.com/embed/${id}?rel=0${autoplay ? '&autoplay=1' : ''}`;
+    if (ytFrame) ytFrame.src = `https://www.youtube-nocookie.com/embed/${id}?enablejsapi=1&rel=0${autoplay ? '&autoplay=1' : ''}`;
     if (ytTitle) ytTitle.textContent = v.title;
     if (ytMeta) ytMeta.textContent = v.live ? 'Live now' : v.meta;
     if (ytChannel) ytChannel.textContent = v.channel;
@@ -2773,6 +3822,8 @@
       if (icon) icon.className = state.likedVideos.has(id) ? 'fa-solid fa-thumbs-up text-accentRed' : 'fa-regular fa-thumbs-up';
     }
     if (ytLikeCount) ytLikeCount.textContent = state.likedVideos.has(id) ? '1' : '0';
+
+    updateAdaptiveColor(`https://i.ytimg.com/vi/${id}/hqdefault.jpg`);
 
     renderSourceAwarePlayerBar();
     renderUpNext();
@@ -2881,11 +3932,26 @@
         }
       } else if (state.view === 'youtube') {
         youtubeSearchTimer = setTimeout(() => runYouTubeSearch(q), 400);
+      } else if (state.view === 'library') {
+        filterLibraryTracks(q);
       }
       if (!q && state.view === 'youtube') {
         const section = document.getElementById('youtube-search-section');
         if (section) section.classList.add('hidden');
       }
+    });
+  }
+
+  function filterLibraryTracks(query) {
+    const listEl = document.getElementById('lib-tracks-list');
+    if (!listEl) return;
+    const q = query.toLowerCase();
+    listEl.querySelectorAll('[data-track-idx]').forEach(el => {
+      const idx = parseInt(el.dataset.trackIdx, 10);
+      const trk = state.libraryTracks[idx];
+      if (!trk) return;
+      const match = !q || trk.title.toLowerCase().includes(q) || trk.artist.toLowerCase().includes(q);
+      el.style.display = match ? '' : 'none';
     });
   }
 
@@ -3021,6 +4087,7 @@
     renderAuthUI();
     initSupabase();
     await loadLibraryFromIDB();
+    await loadDspSettings();
     checkOnlineStatus();
     renderStationGrids();
     renderRecentlyPlayed();
