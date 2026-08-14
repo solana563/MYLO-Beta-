@@ -191,14 +191,14 @@
 
     <!-- HEADER -->
     <header id="header" class="glass-nav sticky top-0 z-50 flex items-center justify-between px-4 md:px-8 py-4 border-b border-borderWhite">
-      <div class="flex items-center gap-4 flex-1">
-        <button id="mobile-menu-btn" class="md:hidden text-textSecondary hover:text-white" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
-        <div class="relative w-full max-w-md">
+      <div class="flex items-center gap-4 flex-1 min-w-0">
+        <button id="mobile-menu-btn" class="md:hidden text-textSecondary hover:text-white flex-shrink-0" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+        <div class="relative w-full max-w-md min-w-0">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-textSecondary text-sm"></i>
-          <input id="search-input" type="text" placeholder="Search stations &amp; videos" class="w-full bg-white/5 border border-transparent focus:border-accentRed/30 focus:outline-none rounded-md py-1.5 pl-9 pr-4 text-sm transition-all" aria-label="Search music">
+          <input id="search-input" type="text" placeholder="Search stations &amp; videos" class="w-full min-w-0 bg-white/5 border border-transparent focus:border-accentRed/30 focus:outline-none rounded-md py-1.5 pl-9 pr-4 text-sm transition-all" aria-label="Search music">
         </div>
       </div>
-      <div class="flex items-center gap-4 md:gap-6">
+      <div class="flex items-center gap-3 sm:gap-4 md:gap-6 flex-shrink-0">
         <button id="sleep-timer-btn" class="text-textSecondary hover:text-white transition-colors relative" aria-label="Sleep Timer" title="Sleep Timer">
           <i class="fa-solid fa-moon text-lg"></i>
           <span id="sleep-timer-badge" class="hidden absolute -top-1 -right-2 bg-accentRed text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white"></span>
@@ -539,7 +539,7 @@
             <button id="np-artist-link" class="text-xs font-semibold text-[#45A29E] hover:underline disabled:opacity-30 disabled:no-underline transition-all px-2 disabled:cursor-default" disabled>
               View artist
             </button>
-            <div class="relative ml-auto lg:ml-2">
+            <div class="relative lg:ml-2">
               <button id="np-menu-btn" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="More options" aria-haspopup="true" aria-expanded="false">
                 <i class="fa-solid fa-ellipsis"></i>
               </button>
@@ -578,20 +578,20 @@
         <span id="np-remaining-time">-0:00</span>
       </div>
 
-      <div class="flex items-center justify-between gap-4 max-w-4xl mx-auto">
-        <div class="hidden md:block w-36 flex-shrink-0"></div>
+      <div class="flex flex-wrap items-center justify-center md:justify-between gap-x-4 gap-y-3 max-w-4xl mx-auto">
+        <div class="hidden md:block md:order-1 w-36 flex-shrink-0"></div>
 
-        <div class="flex items-center justify-center gap-4 md:gap-6 flex-shrink-0">
+        <div class="order-1 md:order-2 w-full md:w-auto flex items-center justify-center gap-3 sm:gap-4 md:gap-6 flex-shrink-0">
           <button id="np-shuffle" class="w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Shuffle" aria-pressed="false" disabled>
             <i class="fa-solid fa-shuffle"></i>
           </button>
-          <button id="np-prev" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Previous" disabled>
+          <button id="np-prev" class="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Previous" disabled>
             <i class="fa-solid fa-backward-step text-xl"></i>
           </button>
-          <button id="np-playpause" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform text-2xl shadow-lg disabled:opacity-40 focus-visible:outline-none" aria-label="Play" disabled>
+          <button id="np-playpause" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform text-2xl shadow-lg disabled:opacity-40 focus-visible:outline-none" aria-label="Play" disabled>
             <i class="fa-solid fa-play ml-1"></i>
           </button>
-          <button id="np-next" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Next" disabled>
+          <button id="np-next" class="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Next" disabled>
             <i class="fa-solid fa-forward-step text-xl"></i>
           </button>
           <button id="np-repeat" class="relative w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Repeat" aria-pressed="false" disabled>
@@ -600,7 +600,7 @@
           </button>
         </div>
 
-        <div class="flex items-center justify-end gap-2 md:gap-3 w-auto md:w-36 flex-shrink-0">
+        <div class="order-2 md:order-3 w-full md:w-36 flex items-center justify-center md:justify-end gap-3 md:gap-3 flex-shrink-0">
           <div class="hidden lg:flex items-center gap-2 w-24">
             <i class="fa-solid fa-volume-low text-xs text-[#C5C6C7]/70"></i>
             <input id="np-volume-slider" type="range" min="0" max="100" value="70" class="range-slider-accent flex-1" aria-label="Volume">
@@ -835,12 +835,42 @@
   <div class="absolute inset-0 bg-black/70" data-close-modal></div>
   <div class="relative bg-cardBg border border-borderWhite rounded-2xl w-full max-w-sm p-6 space-y-4">
     <div class="flex items-center justify-between">
-      <h2 class="text-lg font-bold">Sign in to MYLO</h2>
+      <h2 id="signin-title" class="text-lg font-bold">Sign in to MYLO</h2>
       <button data-close-modal class="text-textSecondary hover:text-white" aria-label="Close sign in"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <p id="signin-status" class="text-xs text-textSecondary leading-relaxed">Sign in with a magic link to sync your liked stations, liked videos and listening history across devices.</p>
-    <input id="signin-email" type="email" placeholder="you@example.com" class="w-full bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm" autocomplete="email">
-    <button id="signin-send" class="w-full bg-accentRed hover:bg-accentRedHover font-bold py-2.5 rounded-lg transition-all">Send magic link</button>
+
+    <div id="signin-tabs" class="flex gap-1 bg-white/5 rounded-lg p-1">
+      <button id="signin-tab-in" type="button" data-mode="signin" class="flex-1 py-1.5 rounded-md text-sm font-semibold transition-all">Sign In</button>
+      <button id="signin-tab-up" type="button" data-mode="signup" class="flex-1 py-1.5 rounded-md text-sm font-semibold transition-all">Sign Up</button>
+    </div>
+
+    <p id="signin-status" class="text-xs text-textSecondary leading-relaxed">Sign in to sync your liked stations, liked videos, library and listening history across devices.</p>
+
+    <div id="signin-form-fields" class="space-y-3">
+      <input id="signin-email" type="email" placeholder="you@example.com" class="w-full bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm" autocomplete="email">
+
+      <div class="relative">
+        <input id="signin-password" type="password" placeholder="Password" class="w-full bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 pr-10 text-sm" autocomplete="current-password">
+        <button id="signin-pw-toggle" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-textSecondary hover:text-white" aria-label="Show password">
+          <i class="fa-solid fa-eye text-xs"></i>
+        </button>
+      </div>
+
+      <input id="signin-password-confirm" type="password" placeholder="Confirm password" class="hidden w-full bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm" autocomplete="new-password">
+
+      <button id="signin-forgot" type="button" class="text-xs text-accentRed hover:underline">Forgot password?</button>
+    </div>
+
+    <button id="signin-primary-btn" class="w-full bg-accentRed hover:bg-accentRedHover font-bold py-2.5 rounded-lg transition-all">Sign In</button>
+
+    <div id="signin-divider" class="flex items-center gap-3">
+      <div class="flex-1 h-px bg-borderWhite"></div>
+      <span class="text-[10px] text-textSecondary uppercase tracking-wider">or</span>
+      <div class="flex-1 h-px bg-borderWhite"></div>
+    </div>
+
+    <button id="signin-magic-link-btn" class="w-full bg-white/5 hover:bg-white/10 font-semibold py-2.5 rounded-lg transition-all text-sm">Email me a magic link instead</button>
+
     <button id="signin-signout" class="hidden w-full bg-white/5 hover:bg-white/10 font-bold py-2.5 rounded-lg transition-all">Sign out</button>
   </div>
 </div>
@@ -1306,38 +1336,182 @@
     }
   }
 
+  let signinMode = 'signin'; // 'signin' | 'signup'
+
+  function setSigninMode(mode) {
+    signinMode = mode;
+    const tabIn = document.getElementById('signin-tab-in');
+    const tabUp = document.getElementById('signin-tab-up');
+    const title = document.getElementById('signin-title');
+    const primaryBtn = document.getElementById('signin-primary-btn');
+    const confirmInput = document.getElementById('signin-password-confirm');
+    const forgotBtn = document.getElementById('signin-forgot');
+    const status = document.getElementById('signin-status');
+
+    [tabIn, tabUp].forEach(btn => {
+      const active = btn.dataset.mode === mode;
+      btn.classList.toggle('bg-accentRed', active);
+      btn.classList.toggle('text-white', active);
+      btn.classList.toggle('text-textSecondary', !active);
+    });
+
+    if (mode === 'signup') {
+      title.textContent = 'Create your MYLO account';
+      primaryBtn.textContent = 'Create Account';
+      confirmInput.classList.remove('hidden');
+      forgotBtn.classList.add('hidden');
+      status.textContent = 'Sync your liked stations, liked videos, library and listening history across devices.';
+    } else {
+      title.textContent = 'Sign in to MYLO';
+      primaryBtn.textContent = 'Sign In';
+      confirmInput.classList.add('hidden');
+      forgotBtn.classList.remove('hidden');
+      status.textContent = 'Sign in to sync your liked stations, liked videos, library and listening history across devices.';
+    }
+  }
+
   function openSignInModal() {
     const modal = document.getElementById('signin-modal');
-    const sendBtn = document.getElementById('signin-send');
+    const tabs = document.getElementById('signin-tabs');
+    const fields = document.getElementById('signin-form-fields');
+    const primaryBtn = document.getElementById('signin-primary-btn');
+    const divider = document.getElementById('signin-divider');
+    const magicBtn = document.getElementById('signin-magic-link-btn');
     const outBtn = document.getElementById('signin-signout');
     const status = document.getElementById('signin-status');
-    const emailInput = document.getElementById('signin-email');
     if (!modal) return;
+
     if (!supabase) {
       status.textContent = 'Connect Supabase first — open Settings (gear icon) and paste your project URL and anon key.';
-      sendBtn.classList.add('hidden');
+      tabs.classList.add('hidden');
+      fields.classList.add('hidden');
+      primaryBtn.classList.add('hidden');
+      divider.classList.add('hidden');
+      magicBtn.classList.add('hidden');
       outBtn.classList.add('hidden');
     } else if (currentUser) {
       status.textContent = 'Signed in as ' + (currentUser.email || 'your account') + '.';
-      sendBtn.classList.add('hidden');
-      emailInput.classList.add('hidden');
+      tabs.classList.add('hidden');
+      fields.classList.add('hidden');
+      primaryBtn.classList.add('hidden');
+      divider.classList.add('hidden');
+      magicBtn.classList.add('hidden');
       outBtn.classList.remove('hidden');
     } else {
-      status.textContent = 'Sign in with a magic link to sync your liked stations, liked videos and listening history across devices.';
-      sendBtn.classList.remove('hidden');
-      emailInput.classList.remove('hidden');
+      tabs.classList.remove('hidden');
+      fields.classList.remove('hidden');
+      primaryBtn.classList.remove('hidden');
+      divider.classList.remove('hidden');
+      magicBtn.classList.remove('hidden');
       outBtn.classList.add('hidden');
+      document.getElementById('signin-email').value = '';
+      document.getElementById('signin-password').value = '';
+      document.getElementById('signin-password-confirm').value = '';
+      setSigninMode('signin');
     }
     modal.classList.remove('hidden');
   }
 
-  const sendBtnEl = document.getElementById('signin-send');
-  if (sendBtnEl) {
-    sendBtnEl.addEventListener('click', async () => {
+  const tabInEl = document.getElementById('signin-tab-in');
+  const tabUpEl = document.getElementById('signin-tab-up');
+  if (tabInEl) tabInEl.addEventListener('click', () => setSigninMode('signin'));
+  if (tabUpEl) tabUpEl.addEventListener('click', () => setSigninMode('signup'));
+
+  const pwToggleEl = document.getElementById('signin-pw-toggle');
+  if (pwToggleEl) {
+    pwToggleEl.addEventListener('click', () => {
+      const pwInput = document.getElementById('signin-password');
+      const icon = pwToggleEl.querySelector('i');
+      const showing = pwInput.type === 'text';
+      pwInput.type = showing ? 'password' : 'text';
+      icon.className = showing ? 'fa-solid fa-eye text-xs' : 'fa-solid fa-eye-slash text-xs';
+      pwToggleEl.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  }
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  const primaryBtnEl = document.getElementById('signin-primary-btn');
+  if (primaryBtnEl) {
+    primaryBtnEl.addEventListener('click', async () => {
       if (!supabase) return;
-      const email = document.getElementById('signin-email').value.trim();
-      if (!email) return;
       const status = document.getElementById('signin-status');
+      const email = document.getElementById('signin-email').value.trim();
+      const password = document.getElementById('signin-password').value;
+
+      if (!isValidEmail(email)) {
+        status.textContent = 'Enter a valid email address.';
+        return;
+      }
+      if (password.length < 6) {
+        status.textContent = 'Password must be at least 6 characters.';
+        return;
+      }
+
+      if (signinMode === 'signup') {
+        const confirm = document.getElementById('signin-password-confirm').value;
+        if (password !== confirm) {
+          status.textContent = 'Passwords don\'t match.';
+          return;
+        }
+        status.textContent = 'Creating your account…';
+        try {
+          const { data, error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+          if (data.session) {
+            status.textContent = 'Account created — you\'re signed in.';
+          } else {
+            status.textContent = 'Account created — check your email to confirm before signing in.';
+          }
+        } catch (err) {
+          status.textContent = 'Could not create account: ' + err.message;
+        }
+      } else {
+        status.textContent = 'Signing in…';
+        try {
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          status.textContent = 'Signed in.';
+        } catch (err) {
+          status.textContent = 'Could not sign in: ' + err.message;
+        }
+      }
+    });
+  }
+
+  const forgotBtnEl = document.getElementById('signin-forgot');
+  if (forgotBtnEl) {
+    forgotBtnEl.addEventListener('click', async () => {
+      if (!supabase) return;
+      const status = document.getElementById('signin-status');
+      const email = document.getElementById('signin-email').value.trim();
+      if (!isValidEmail(email)) {
+        status.textContent = 'Enter your email above first, then tap "Forgot password?".';
+        return;
+      }
+      status.textContent = 'Sending password reset link…';
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+        if (error) throw error;
+        status.textContent = 'Check your inbox for a link to reset your password.';
+      } catch (err) {
+        status.textContent = 'Could not send reset link: ' + err.message;
+      }
+    });
+  }
+
+  const magicLinkBtnEl = document.getElementById('signin-magic-link-btn');
+  if (magicLinkBtnEl) {
+    magicLinkBtnEl.addEventListener('click', async () => {
+      if (!supabase) return;
+      const status = document.getElementById('signin-status');
+      const email = document.getElementById('signin-email').value.trim();
+      if (!isValidEmail(email)) {
+        status.textContent = 'Enter a valid email address above first.';
+        return;
+      }
       status.textContent = 'Sending magic link…';
       try {
         const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
