@@ -56,6 +56,16 @@
   .range-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 12px; height: 12px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 0 2px rgba(0,0,0,0.4); }
   .range-slider::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.15); }
   .range-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #ffffff; border: none; }
+  .range-slider-accent { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+  .range-slider-accent::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: rgba(197,198,199,0.2); }
+  .range-slider-accent::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 12px; height: 12px; border-radius: 50%; background: #45A29E; box-shadow: 0 0 8px rgba(69,162,158,0.6); }
+  .range-slider-accent::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(197,198,199,0.2); }
+  .range-slider-accent::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #45A29E; border: none; box-shadow: 0 0 8px rgba(69,162,158,0.6); }
+  #np-title-wrap.marquee #np-title { animation: npMarquee 9s linear infinite; padding-right: 3rem; }
+  @keyframes npMarquee {
+    0%, 10% { transform: translateX(0); }
+    90%, 100% { transform: translateX(calc(-1 * var(--marquee-distance, 0px))); }
+  }
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
   .view.active .fade-in { animation: fadeIn 0.35s ease both; }
@@ -476,103 +486,145 @@
 </div>
 
 <!-- NOW PLAYING -->
-<div id="now-playing-screen" class="hidden fixed inset-0 z-[75] flex-col translate-y-full transition-transform duration-300 ease-out">
-  <div id="np-bg" class="absolute inset-0 bg-gradient-to-br from-accentRed to-orange-500"></div>
-  <div class="absolute inset-0 bg-black/50"></div>
-  <div class="relative z-10 flex flex-col h-full">
-    <div class="flex items-center justify-between px-6 pt-6">
-      <button id="np-close" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="Minimize now playing">
-        <i class="fa-solid fa-chevron-down"></i>
-      </button>
-      <span class="text-xs font-bold uppercase tracking-widest text-white/70">Now Playing</span>
-      <div class="flex items-center gap-2">
-        <button id="np-lyrics-btn" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none text-white" aria-label="Lyrics" title="Lyrics">
-          <i class="fa-solid fa-align-left"></i>
-        </button>
-        <button id="np-dsp-btn" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none text-white" aria-label="Audio FX and Equalizer" title="Audio FX & EQ">
-          <i class="fa-solid fa-sliders"></i>
-        </button>
-        <button id="np-like" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="Like this station" disabled>
-          <i class="fa-regular fa-heart"></i>
-        </button>
-      </div>
-    </div>
-
-    <div class="flex-1 flex flex-col items-center justify-center px-8 gap-8 min-h-0">
-      <div id="np-art" class="w-56 h-56 md:w-72 md:h-72 rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br from-accentRed to-orange-500 flex-shrink-0">
-        <i id="np-art-icon" class="fa-solid fa-radio text-white text-6xl md:text-7xl"></i>
-      </div>
-      <div class="text-center max-w-md">
-        <h2 id="np-title" class="text-2xl md:text-3xl font-bold mb-2 leading-tight">Nothing playing</h2>
-        <p id="np-subtitle" class="text-textSecondary">Pick a station to get started</p>
-        <div id="np-live-indicator" class="hidden items-center justify-center gap-2 mt-3">
-          <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
-          <span class="text-[10px] font-bold uppercase tracking-widest">Live Streaming</span>
-        </div>
-      </div>
-      <div class="w-full max-w-xs h-10 my-1">
-        <canvas id="np-visualizer" class="w-full h-full opacity-90 rounded-lg"></canvas>
-      </div>
-    </div>
-
-    <div class="px-8 pb-10 space-y-5 flex-shrink-0">
-      <div id="np-progress-container" class="hidden items-center gap-3 max-w-sm mx-auto text-xs font-mono text-textSecondary">
-        <span id="np-curr-time">0:00</span>
-        <input id="np-seek-slider" type="range" min="0" max="100" value="0" step="0.1" class="range-slider flex-1" aria-label="Seek track position">
-        <span id="np-total-time">0:00</span>
-      </div>
-      <div class="flex items-center justify-center gap-8">
-        <button id="np-prev" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Previous" disabled>
-          <i class="fa-solid fa-backward-step text-xl"></i>
-        </button>
-        <button id="np-playpause" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform text-2xl shadow-lg disabled:opacity-40 focus-visible:outline-none" aria-label="Play" disabled>
-          <i class="fa-solid fa-play ml-1"></i>
-        </button>
-        <button id="np-next" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Next" disabled>
-          <i class="fa-solid fa-forward-step text-xl"></i>
-        </button>
-      </div>
-      <div class="flex items-center gap-3 max-w-sm mx-auto">
-        <i class="fa-solid fa-volume-low text-xs text-textSecondary"></i>
-        <input id="np-volume-slider" type="range" min="0" max="100" value="70" class="range-slider flex-1" aria-label="Volume">
-        <i class="fa-solid fa-volume-high text-xs text-textSecondary"></i>
-      </div>
-    </div>
-  </div>
-</div>
-
 <audio id="radio-audio" preload="none" crossorigin="anonymous"></audio>
 <audio id="library-audio" preload="none" crossorigin="anonymous"></audio>
 <audio id="library-audio-2" preload="none" crossorigin="anonymous"></audio>
 
-<!-- LYRICS MODAL -->
-<div id="lyrics-modal" class="hidden fixed inset-0 z-[85] flex items-center justify-center p-4">
-  <div class="absolute inset-0 bg-black/75" data-close-modal></div>
-  <div class="relative bg-cardBg border border-borderWhite rounded-3xl w-full max-w-lg p-6 space-y-5 max-h-[85vh] flex flex-col shadow-2xl">
-    <div class="flex items-center justify-between border-b border-borderWhite/40 pb-4 flex-shrink-0">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="w-9 h-9 rounded-xl bg-accentRed/20 flex items-center justify-center text-accentRed flex-shrink-0">
-          <i class="fa-solid fa-align-left"></i>
-        </div>
-        <div class="min-w-0">
-          <h3 class="font-bold text-lg leading-none">Lyrics</h3>
-          <p id="lyrics-track-label" class="text-xs text-textSecondary mt-1 truncate">Nothing playing</p>
-        </div>
-      </div>
-      <button data-close-modal class="text-textSecondary hover:text-white p-1 flex-shrink-0" aria-label="Close lyrics"><i class="fa-solid fa-xmark text-lg"></i></button>
+<div id="now-playing-screen" class="hidden fixed inset-0 z-[75] flex-col translate-y-full transition-transform duration-300 ease-out bg-[#0B0C10]">
+  <div id="np-glow" class="absolute -top-1/3 left-1/2 -translate-x-1/2 w-[140%] md:w-[60%] h-1/2 blur-[110px] opacity-40 pointer-events-none bg-gradient-to-br from-accentRed to-orange-500 transition-colors duration-500"></div>
+
+  <div class="relative z-10 flex flex-col h-full min-h-0">
+    <!-- TOP BAR -->
+    <div class="flex items-center justify-between px-6 pt-6 flex-shrink-0">
+      <button id="np-close" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="Minimize now playing">
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <span class="text-xs font-bold uppercase tracking-widest text-[#C5C6C7]/60">Now Playing</span>
+      <div class="w-10"></div>
     </div>
 
-    <div id="lyrics-body" class="flex-1 overflow-y-auto custom-scrollbar text-center px-2 space-y-2">
-      <p class="text-textSecondary text-sm py-10">Play a library track to see its lyrics here.</p>
+    <!-- SPLIT BODY: album/info (left) + lyrics (right) -->
+    <div class="flex-1 flex flex-col lg:flex-row items-stretch gap-6 lg:gap-10 px-6 md:px-10 py-4 min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+
+      <!-- LEFT: album art + track info -->
+      <div class="flex flex-col items-center lg:items-start justify-center flex-1 min-w-0 gap-6 lg:py-4">
+        <div class="relative flex-shrink-0">
+          <div id="np-art-glow" class="absolute inset-4 blur-3xl opacity-60 bg-gradient-to-br from-accentRed to-orange-500 rounded-3xl transition-colors duration-500"></div>
+          <div id="np-art" class="relative w-60 h-60 sm:w-72 sm:h-72 lg:w-[22rem] lg:h-[22rem] rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br from-accentRed to-orange-500 overflow-hidden">
+            <i id="np-art-icon" class="fa-solid fa-radio text-white text-7xl"></i>
+          </div>
+        </div>
+
+        <div class="w-full max-w-sm text-center lg:text-left min-w-0">
+          <div id="np-title-wrap" class="overflow-hidden whitespace-nowrap">
+            <h2 id="np-title" class="inline-block text-2xl md:text-3xl font-bold leading-tight text-white">Nothing playing</h2>
+          </div>
+          <p id="np-subtitle" class="text-[#C5C6C7]/80 mt-1 truncate">Pick something to play</p>
+          <p id="np-album-label" class="text-[11px] uppercase tracking-widest text-[#C5C6C7]/50 mt-1">—</p>
+
+          <div id="np-live-indicator" class="hidden items-center justify-center lg:justify-start gap-2 mt-3">
+            <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
+            <span class="text-[10px] font-bold uppercase tracking-widest">Live Streaming</span>
+          </div>
+
+          <div class="w-full h-8 mt-4 hidden sm:block">
+            <canvas id="np-visualizer" class="w-full h-full opacity-80 rounded-lg"></canvas>
+          </div>
+
+          <!-- QUICK ACTIONS -->
+          <div class="flex items-center justify-center lg:justify-start gap-2 mt-5">
+            <button id="np-like" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all focus-visible:outline-none disabled:opacity-30" aria-label="Like this track" disabled>
+              <i class="fa-regular fa-heart"></i>
+            </button>
+            <button id="np-artist-link" class="text-xs font-semibold text-[#45A29E] hover:underline disabled:opacity-30 disabled:no-underline transition-all px-2 disabled:cursor-default" disabled>
+              View artist
+            </button>
+            <div class="relative ml-auto lg:ml-2">
+              <button id="np-menu-btn" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all focus-visible:outline-none" aria-label="More options" aria-haspopup="true" aria-expanded="false">
+                <i class="fa-solid fa-ellipsis"></i>
+              </button>
+              <div id="np-menu" class="hidden absolute right-0 lg:left-0 lg:right-auto bottom-12 w-52 bg-cardBg border border-borderWhite rounded-xl shadow-2xl overflow-hidden z-20">
+                <button id="np-menu-playlist" class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-default" disabled><i class="fa-solid fa-list-ul w-4 text-center"></i> Add to playlist</button>
+                <button id="np-menu-share" class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2.5"><i class="fa-solid fa-share w-4 text-center"></i> Share</button>
+                <button id="np-menu-dsp" class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2.5"><i class="fa-solid fa-sliders w-4 text-center"></i> Audio FX &amp; EQ</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: synced lyrics panel -->
+      <div id="np-lyrics-panel" class="flex flex-col w-full lg:w-[380px] flex-shrink-0 min-h-[240px] lg:min-h-0 border-t lg:border-t-0 lg:border-l border-white/10 pt-6 lg:pt-2 lg:pl-8">
+        <div class="flex items-center justify-between mb-3 flex-shrink-0">
+          <h3 class="text-xs font-bold uppercase tracking-widest text-[#C5C6C7]/60">Lyrics</h3>
+          <button id="np-lyrics-fix-toggle" class="text-[10px] text-[#45A29E] hover:underline">Fix match</button>
+        </div>
+        <div id="np-lyrics-fix-form" class="hidden flex-shrink-0 flex gap-2 mb-3">
+          <input id="lyrics-artist-input" type="text" placeholder="Artist" class="w-1/2 bg-white/5 border border-borderWhite focus:border-[#45A29E]/50 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs">
+          <input id="lyrics-title-input" type="text" placeholder="Title" class="w-1/2 bg-white/5 border border-borderWhite focus:border-[#45A29E]/50 focus:outline-none rounded-lg px-2.5 py-1.5 text-xs">
+          <button id="lyrics-retry-btn" class="flex-shrink-0 bg-white/10 hover:bg-white/20 px-3 rounded-lg text-xs font-semibold transition-all">Go</button>
+        </div>
+        <div id="np-lyrics-body" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-1 min-h-0 text-center lg:text-left">
+          <p class="text-[#C5C6C7]/60 text-sm py-10 text-center">Play something to see lyrics here.</p>
+        </div>
+      </div>
     </div>
 
-    <div class="flex-shrink-0 space-y-2 border-t border-borderWhite/40 pt-4">
-      <p class="text-[11px] text-textSecondary">Wrong song matched? Fix the search:</p>
-      <div class="flex gap-2">
-        <input id="lyrics-artist-input" type="text" placeholder="Artist" class="w-1/2 bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm">
-        <input id="lyrics-title-input" type="text" placeholder="Title" class="w-1/2 bg-white/5 border border-borderWhite focus:border-accentRed/40 focus:outline-none rounded-lg px-3 py-2 text-sm">
+    <!-- BOTTOM CONTROL BAR -->
+    <div class="relative flex-shrink-0 border-t border-white/10 bg-[#0B0C10]/95 px-6 md:px-10 py-5 space-y-4">
+      <div id="np-progress-container" class="hidden items-center gap-3 text-xs font-mono text-[#C5C6C7]/70 max-w-2xl mx-auto">
+        <span id="np-curr-time">0:00</span>
+        <input id="np-seek-slider" type="range" min="0" max="100" value="0" step="0.1" class="range-slider-accent flex-1" aria-label="Seek track position">
+        <span id="np-remaining-time">-0:00</span>
       </div>
-      <button id="lyrics-retry-btn" class="w-full bg-white/5 hover:bg-white/10 font-semibold py-2 rounded-lg transition-all text-sm">Search again</button>
+
+      <div class="flex items-center justify-between gap-4 max-w-4xl mx-auto">
+        <div class="hidden md:block w-36 flex-shrink-0"></div>
+
+        <div class="flex items-center justify-center gap-4 md:gap-6 flex-shrink-0">
+          <button id="np-shuffle" class="w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Shuffle" aria-pressed="false" disabled>
+            <i class="fa-solid fa-shuffle"></i>
+          </button>
+          <button id="np-prev" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Previous" disabled>
+            <i class="fa-solid fa-backward-step text-xl"></i>
+          </button>
+          <button id="np-playpause" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform text-2xl shadow-lg disabled:opacity-40 focus-visible:outline-none" aria-label="Play" disabled>
+            <i class="fa-solid fa-play ml-1"></i>
+          </button>
+          <button id="np-next" class="w-12 h-12 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Next" disabled>
+            <i class="fa-solid fa-forward-step text-xl"></i>
+          </button>
+          <button id="np-repeat" class="relative w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors disabled:opacity-30 focus-visible:outline-none" aria-label="Repeat" aria-pressed="false" disabled>
+            <i class="fa-solid fa-repeat"></i>
+            <span id="np-repeat-one-dot" class="hidden absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#45A29E]"></span>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 md:gap-3 w-auto md:w-36 flex-shrink-0">
+          <div class="hidden lg:flex items-center gap-2 w-24">
+            <i class="fa-solid fa-volume-low text-xs text-[#C5C6C7]/70"></i>
+            <input id="np-volume-slider" type="range" min="0" max="100" value="70" class="range-slider-accent flex-1" aria-label="Volume">
+          </div>
+          <button id="np-lyrics-toggle" class="w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors focus-visible:outline-none" aria-label="Toggle lyrics panel" aria-pressed="true">
+            <i class="fa-solid fa-align-left"></i>
+          </button>
+          <button id="np-queue-btn" class="w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors focus-visible:outline-none" aria-label="Queue" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-list"></i>
+          </button>
+          <button id="np-fullscreen-btn" class="w-9 h-9 rounded-full flex items-center justify-center text-[#C5C6C7] hover:text-white transition-colors focus-visible:outline-none" aria-label="Fullscreen">
+            <i class="fa-solid fa-expand"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- QUEUE POPOVER -->
+      <div id="np-queue-panel" class="hidden absolute bottom-full right-6 md:right-10 mb-3 w-80 max-h-96 bg-cardBg border border-borderWhite rounded-2xl shadow-2xl overflow-hidden flex-col z-30">
+        <div class="px-4 py-3 border-b border-borderWhite/40 flex items-center justify-between flex-shrink-0">
+          <h3 class="font-bold text-sm">Up Next</h3>
+          <button id="np-queue-close" class="text-textSecondary hover:text-white" aria-label="Close queue"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="np-queue-list" class="overflow-y-auto custom-scrollbar flex-1 p-2"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -828,6 +880,9 @@
     selectedPlaylistId: null,
     sleepTimerMinutes: 0,
     sleepTimerEndTime: null,
+    shuffle: false,
+    repeat: 'off', // 'off' | 'all' | 'one'
+    librarySearchQuery: '',
   };
 
   /* ---------------------------------------------------------------
@@ -847,20 +902,42 @@
   const seekSlider = document.getElementById('seek-slider');
 
   const npScreen = document.getElementById('now-playing-screen');
+  const npGlow = document.getElementById('np-glow');
+  const npArtGlow = document.getElementById('np-art-glow');
+  const npTitleWrap = document.getElementById('np-title-wrap');
   const npTitle = document.getElementById('np-title');
   const npSubtitle = document.getElementById('np-subtitle');
+  const npAlbumLabel = document.getElementById('np-album-label');
   const npArt = document.getElementById('np-art');
   const npLiveIndicator = document.getElementById('np-live-indicator');
   const npPlaypause = document.getElementById('np-playpause');
   const npPrevBtn = document.getElementById('np-prev');
   const npNextBtn = document.getElementById('np-next');
+  const npShuffleBtn = document.getElementById('np-shuffle');
+  const npRepeatBtn = document.getElementById('np-repeat');
+  const npRepeatOneDot = document.getElementById('np-repeat-one-dot');
   const npLike = document.getElementById('np-like');
+  const npArtistLink = document.getElementById('np-artist-link');
+  const npMenuBtn = document.getElementById('np-menu-btn');
+  const npMenu = document.getElementById('np-menu');
+  const npMenuPlaylist = document.getElementById('np-menu-playlist');
+  const npMenuShare = document.getElementById('np-menu-share');
+  const npMenuDsp = document.getElementById('np-menu-dsp');
   const npVolumeSlider = document.getElementById('np-volume-slider');
   const volumeSlider = document.getElementById('volume-slider');
   const npProgressContainer = document.getElementById('np-progress-container');
   const npCurrTimeEl = document.getElementById('np-curr-time');
-  const npTotalTimeEl = document.getElementById('np-total-time');
+  const npRemainingTimeEl = document.getElementById('np-remaining-time');
   const npSeekSlider = document.getElementById('np-seek-slider');
+  const npLyricsPanel = document.getElementById('np-lyrics-panel');
+  const npLyricsToggle = document.getElementById('np-lyrics-toggle');
+  const npLyricsFixToggle = document.getElementById('np-lyrics-fix-toggle');
+  const npLyricsFixForm = document.getElementById('np-lyrics-fix-form');
+  const npQueueBtn = document.getElementById('np-queue-btn');
+  const npQueuePanel = document.getElementById('np-queue-panel');
+  const npQueueClose = document.getElementById('np-queue-close');
+  const npQueueList = document.getElementById('np-queue-list');
+  const npFullscreenBtn = document.getElementById('np-fullscreen-btn');
 
   const audioRadio = document.getElementById('radio-audio');
   const audioLibrary = document.getElementById('library-audio');
@@ -924,6 +1001,22 @@
 
     const mainEl = document.getElementById('main-content');
     if (mainEl) mainEl.scrollTop = 0;
+
+    const searchInputEl = document.getElementById('search-input');
+    if (searchInputEl) {
+      searchInputEl.value = '';
+      searchInputEl.placeholder = viewName === 'radio' ? 'Search thousands of live stations'
+        : viewName === 'youtube' ? 'Search YouTube'
+        : viewName === 'library' ? 'Search your library'
+        : 'Search stations & videos';
+    }
+    if (state.librarySearchQuery) {
+      state.librarySearchQuery = '';
+      renderLibraryTracks();
+      renderLibraryFavs();
+    }
+    const ytSearchSection = document.getElementById('youtube-search-section');
+    if (ytSearchSection) ytSearchSection.classList.add('hidden');
   }
 
   /* ---------------------------------------------------------------
@@ -1646,10 +1739,10 @@
   }
 
   function renderLyricsBody(result) {
-    const body = document.getElementById('lyrics-body');
+    const body = document.getElementById('np-lyrics-body');
     if (!body) return;
     if (!result || !result.found) {
-      body.innerHTML = '<p class="text-textSecondary text-sm py-10">No lyrics found for this track. Try fixing the artist/title below.</p>';
+      body.innerHTML = '<p class="text-[#C5C6C7]/60 text-sm py-10 text-center">No lyrics found for this track. Try "Fix match" above.</p>';
       return;
     }
     if (result.synced && result.synced.length) {
@@ -1661,12 +1754,12 @@
         `<p class="lyrics-line plain">${escapeHtml(line) || '&nbsp;'}</p>`
       ).join('');
     } else {
-      body.innerHTML = '<p class="text-textSecondary text-sm py-10">No lyrics found for this track.</p>';
+      body.innerHTML = '<p class="text-[#C5C6C7]/60 text-sm py-10 text-center">No lyrics found for this track.</p>';
     }
   }
 
   async function loadLyricsForTrack(artist, title, durationSec, cacheKey) {
-    const body = document.getElementById('lyrics-body');
+    const body = document.getElementById('np-lyrics-body');
     currentLyricsSynced = null;
     currentLyricsTrackKey = cacheKey;
     if (LYRICS_CACHE.has(cacheKey)) {
@@ -1675,7 +1768,7 @@
       renderLyricsBody(cached);
       return;
     }
-    if (body) body.innerHTML = '<div class="flex justify-center py-10"><i class="fa-solid fa-spinner fa-spin text-textSecondary"></i></div>';
+    if (body) body.innerHTML = '<div class="flex justify-center py-10"><i class="fa-solid fa-spinner fa-spin text-[#C5C6C7]/60"></i></div>';
     const result = await fetchLyrics(artist, title, durationSec);
     LYRICS_CACHE.set(cacheKey, result);
     if (currentLyricsTrackKey === cacheKey) {
@@ -1684,53 +1777,51 @@
     }
   }
 
-  function openLyricsModal() {
-    const modal = document.getElementById('lyrics-modal');
-    const label = document.getElementById('lyrics-track-label');
+  function refreshLyricsForCurrentSource() {
     const artistInput = document.getElementById('lyrics-artist-input');
     const titleInput = document.getElementById('lyrics-title-input');
-    if (!modal) return;
 
     if (state.activeEngine === 'library' && state.currentLibraryTrackIdx >= 0) {
       const track = state.libraryTracks[state.currentLibraryTrackIdx];
       if (track) {
-        if (label) label.textContent = track.artist + ' — ' + track.title;
         if (artistInput) artistInput.value = track.artist || '';
         if (titleInput) titleInput.value = track.title || '';
         loadLyricsForTrack(track.artist, track.title, track.duration, 'lib:' + track.id);
+        return;
       }
     } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
       const v = getVideo(state.currentVideoId);
       if (v) {
         const guessArtist = v.channel || '';
         const guessTitle = v.title || '';
-        if (label) label.textContent = guessArtist + ' — ' + guessTitle;
         if (artistInput) artistInput.value = guessArtist;
         if (titleInput) titleInput.value = guessTitle;
         loadLyricsForTrack(guessArtist, guessTitle, null, 'yt:' + v.id);
+        return;
       }
-    } else {
-      if (label) label.textContent = 'Nothing playing';
-      if (artistInput) artistInput.value = '';
-      if (titleInput) titleInput.value = '';
-      currentLyricsSynced = null;
-      currentLyricsTrackKey = null;
-      const body = document.getElementById('lyrics-body');
-      if (body) body.innerHTML = '<p class="text-textSecondary text-sm py-10">Lyrics aren\'t available for live radio. Play a library track or a video instead.</p>';
     }
-    modal.classList.remove('hidden');
+
+    if (artistInput) artistInput.value = '';
+    if (titleInput) titleInput.value = '';
+    currentLyricsSynced = null;
+    currentLyricsTrackKey = null;
+    const body = document.getElementById('np-lyrics-body');
+    if (body) {
+      body.innerHTML = state.activeEngine === 'radio'
+        ? '<p class="text-[#C5C6C7]/60 text-sm py-10 text-center">Lyrics aren\'t available for live radio.</p>'
+        : '<p class="text-[#C5C6C7]/60 text-sm py-10 text-center">Play something to see lyrics here.</p>';
+    }
   }
 
   function updateLyricsHighlight(currentTime) {
     if (!currentLyricsSynced || !currentLyricsSynced.length) return;
-    const modal = document.getElementById('lyrics-modal');
-    if (!modal || modal.classList.contains('hidden')) return;
+    if (!npLyricsPanel || npLyricsPanel.classList.contains('hidden')) return;
     let activeIdx = -1;
     for (let i = 0; i < currentLyricsSynced.length; i++) {
       if (currentLyricsSynced[i].time <= currentTime) activeIdx = i;
       else break;
     }
-    const body = document.getElementById('lyrics-body');
+    const body = document.getElementById('np-lyrics-body');
     if (!body) return;
     const lines = body.querySelectorAll('.lyrics-line');
     lines.forEach((el, i) => {
@@ -1740,19 +1831,28 @@
     });
   }
 
-  const npLyricsBtn = document.getElementById('np-lyrics-btn');
-  if (npLyricsBtn) npLyricsBtn.addEventListener('click', openLyricsModal);
+  if (npLyricsToggle) {
+    npLyricsToggle.addEventListener('click', () => {
+      const isHidden = npLyricsPanel.classList.toggle('hidden');
+      npLyricsToggle.setAttribute('aria-pressed', String(!isHidden));
+      npLyricsToggle.classList.toggle('text-[#45A29E]', !isHidden);
+    });
+  }
+
+  if (npLyricsFixToggle && npLyricsFixForm) {
+    npLyricsFixToggle.addEventListener('click', () => {
+      npLyricsFixForm.classList.toggle('hidden');
+    });
+  }
 
   const lyricsRetryBtn = document.getElementById('lyrics-retry-btn');
   if (lyricsRetryBtn) {
     lyricsRetryBtn.addEventListener('click', () => {
       const artistInput = document.getElementById('lyrics-artist-input');
       const titleInput = document.getElementById('lyrics-title-input');
-      const label = document.getElementById('lyrics-track-label');
       const artist = artistInput ? artistInput.value.trim() : '';
       const title = titleInput ? titleInput.value.trim() : '';
       if (!title) return;
-      if (label) label.textContent = artist + ' — ' + title;
       const key = (currentLyricsTrackKey || 'manual:' + Date.now());
       LYRICS_CACHE.delete(key);
       loadLyricsForTrack(artist, title, null, key);
@@ -1875,15 +1975,21 @@
 
       state.libraryTracks = metaList.map(m => {
         const fileBlob = fileMap.get(m.id);
-        let artUrl = m.artB64 || null;
+        // artB64 (embedded art, extracted locally) takes priority since it's
+        // guaranteed accurate to this exact file; m.artUrl (online-sourced,
+        // e.g. from iTunes lookup) is the fallback — unlike blob: URLs, a
+        // real https:// URL survives a reload, so it's safe to persist directly.
+        const artUrl = m.artB64 || m.artUrl || null;
         return {
           id: m.id,
           title: m.title || 'Unknown Title',
           artist: m.artist || 'Unknown Artist',
+          album: m.album || null,
           duration: m.duration || 0,
           liked: !!m.liked,
           artB64: m.artB64 || null,
           artUrl: artUrl,
+          artSource: m.artB64 ? 'embedded' : (m.artUrl ? 'online' : null),
           file: fileBlob || null
         };
       });
@@ -1901,12 +2007,115 @@
   --------------------------------------------------------------- */
   function genId() { return 'trk-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6); }
 
+  function saveTrackMeta(track) {
+    return dbPut('meta', {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      album: track.album || null,
+      duration: track.duration,
+      liked: track.liked,
+      artB64: track.artB64 || null,
+      // Only persist artUrl when it's a real, reloadable URL (online-sourced
+      // art) — blob: URLs from extractArtwork are session-local and get
+      // reconstructed from artB64 on next load instead.
+      artUrl: track.artSource === 'online' ? track.artUrl : null,
+    });
+  }
+
   function parseFilename(name) {
-    const cleanName = name.replace(/\.[^.]+$/, '');
-    const parts = cleanName.split(' - ');
+    let cleanName = name.replace(/\.[^.]+$/, '');
+    // Strip leading track numbers ("01 - ", "03. ", "7_") and common junk tags
+    // before splitting, so "03. Daft Punk - One More Time (Official Audio)"
+    // parses correctly instead of treating "03." as part of the artist.
+    cleanName = cleanName.replace(/^\s*\d{1,3}[\s._-]+/, '');
+    cleanName = cleanName.replace(/\s*[\(\[](official\s*(video|audio|lyrics?|music\s*video)?|lyrics?|hd|4k|remaster(ed)?|explicit|clean|mv)[\)\]]\s*/gi, ' ');
+    cleanName = cleanName.replace(/\s{2,}/g, ' ').trim();
+
+    const parts = cleanName.split(/\s+-\s+/);
     const artist = parts.length >= 2 ? parts[0].trim() : 'Unknown Artist';
     const title = parts.length >= 2 ? parts.slice(1).join(' - ').trim() : cleanName;
-    return { artist, title };
+    return { artist, title: title || 'Unknown Title' };
+  }
+
+  function readAudioDuration(file) {
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(file);
+      const probe = new Audio();
+      const cleanup = () => URL.revokeObjectURL(url);
+      probe.addEventListener('loadedmetadata', () => {
+        const d = isFinite(probe.duration) ? probe.duration : 0;
+        cleanup();
+        resolve(d);
+      }, { once: true });
+      probe.addEventListener('error', () => { cleanup(); resolve(0); }, { once: true });
+      probe.src = url;
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     ONLINE METADATA ENRICHMENT — iTunes Search API (free, no key,
+     CORS-enabled). Used to correct filename-guessed artist/title and
+     to backfill album art for files with no embedded art, without
+     ever overwriting a real match the user already has.
+  --------------------------------------------------------------- */
+  let metadataEnrichQueue = Promise.resolve();
+
+  async function fetchOnlineMetadata(artist, title) {
+    const term = cleanForLyricsSearch(artist) + ' ' + cleanForLyricsSearch(title);
+    if (!term.trim()) return null;
+    try {
+      const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(term) + '&media=music&entity=song&limit=1';
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const hit = data.results && data.results[0];
+      if (!hit) return null;
+      return {
+        artist: hit.artistName || null,
+        title: hit.trackName || null,
+        album: hit.collectionName || null,
+        // iTunes serves small thumbnails by default; swap the size in the URL for a sharper image.
+        artUrl: hit.artworkUrl100 ? hit.artworkUrl100.replace('100x100bb', '600x600bb') : null,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function enrichTrackMetadata(track) {
+    // Queued sequentially so a batch upload doesn't fire dozens of
+    // simultaneous requests at the free public API at once.
+    metadataEnrichQueue = metadataEnrichQueue.then(async () => {
+      const hadNoEmbeddedArt = !track.artUrl;
+      const hadUnknownArtist = track.artist === 'Unknown Artist';
+      const result = await fetchOnlineMetadata(track.artist, track.title);
+      if (!result) return;
+
+      let changed = false;
+      if (hadUnknownArtist && result.artist) {
+        track.artist = result.artist;
+        if (result.title) track.title = result.title;
+        changed = true;
+      }
+      if (result.album && !track.album) {
+        track.album = result.album;
+        changed = true;
+      }
+      if (hadNoEmbeddedArt && result.artUrl) {
+        track.artUrl = result.artUrl;
+        track.artSource = 'online';
+        changed = true;
+      }
+
+      if (changed) {
+        await saveTrackMeta(track);
+        renderLibraryUI();
+        renderSourceAwarePlayerBar();
+        if (npScreen && !npScreen.classList.contains('hidden')) refreshLyricsForCurrentSource();
+      }
+      await new Promise(r => setTimeout(r, 250)); // be polite to the free API
+    });
   }
 
   function extractArtwork(track) {
@@ -1931,7 +2140,8 @@
           const fr2 = new FileReader();
           fr2.onload = e2 => {
             track.artB64 = e2.target.result;
-            dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+            track.artSource = 'embedded';
+            saveTrackMeta(track);
             resolve();
           };
           fr2.readAsDataURL(blob);
@@ -1950,13 +2160,24 @@
     for (const file of validFiles) {
       const { artist, title } = parseFilename(file.name);
       const id = genId();
-      const track = { id, file, title, artist, artUrl: null, artB64: null, liked: false, duration: 0 };
+      const track = { id, file, title, artist, album: null, artUrl: null, artB64: null, artSource: null, liked: false, duration: 0 };
       state.libraryTracks.push(track);
 
       await dbPut('files', { id, blob: file });
-      await dbPut('meta', { id, title, artist, duration: 0, liked: false, artB64: null });
+      await saveTrackMeta(track);
       extractArtwork(track);
       uploadNewLocalFile(track);
+      enrichTrackMetadata(track);
+
+      // Read real duration immediately rather than waiting for first playback,
+      // so the library list shows correct track lengths right away.
+      readAudioDuration(file).then(duration => {
+        if (duration > 0) {
+          track.duration = duration;
+          saveTrackMeta(track);
+          renderLibraryUI();
+        }
+      });
     }
 
     debouncedSyncCloud('library');
@@ -2497,7 +2718,7 @@
 
       idleAudio.onloadedmetadata = () => {
         track.duration = idleAudio.duration;
-        dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+        saveTrackMeta(track);
         renderLibraryUI();
       };
 
@@ -2540,7 +2761,7 @@
 
       activeAudio.onloadedmetadata = () => {
         track.duration = activeAudio.duration;
-        dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+        saveTrackMeta(track);
         renderLibraryUI();
       };
 
@@ -2561,6 +2782,7 @@
     renderSourceAwarePlayerBar();
     renderLibraryUI();
     startVisualizer();
+    onTrackChanged();
   }
 
   function handleLibraryTimeUpdate(audioEl) {
@@ -2577,7 +2799,10 @@
       if (currTimeEl) currTimeEl.textContent = formatTime(audioEl.currentTime);
       if (totalTimeEl) totalTimeEl.textContent = formatTime(audioEl.duration);
       if (npCurrTimeEl) npCurrTimeEl.textContent = formatTime(audioEl.currentTime);
-      if (npTotalTimeEl) npTotalTimeEl.textContent = formatTime(audioEl.duration);
+      if (npRemainingTimeEl) {
+        const remaining = Math.max(0, (audioEl.duration || 0) - audioEl.currentTime);
+        npRemainingTimeEl.textContent = '-' + formatTime(remaining);
+      }
       updateLyricsHighlight(audioEl.currentTime);
 
       const crossSec = dspState.crossfadeSec;
@@ -2591,8 +2816,24 @@
 
   function handleLibraryTrackEnd() {
     if (isCrossfading) return;
+
+    if (state.repeat === 'one') {
+      playLibraryTrack(state.currentLibraryTrackIdx, true);
+      return;
+    }
+
+    if (state.shuffle && state.libraryTracks.length > 1) {
+      let next;
+      do { next = Math.floor(Math.random() * state.libraryTracks.length); }
+      while (next === state.currentLibraryTrackIdx);
+      playLibraryTrack(next, true);
+      return;
+    }
+
     if (state.currentLibraryTrackIdx + 1 < state.libraryTracks.length) {
       playLibraryTrack(state.currentLibraryTrackIdx + 1, true);
+    } else if (state.repeat === 'all' && state.libraryTracks.length > 0) {
+      playLibraryTrack(0, true);
     } else {
       state.playing = false;
       renderSourceAwarePlayerBar();
@@ -2691,16 +2932,32 @@
     return list[nextIdx];
   }
 
+  function randomOther(list, currentId) {
+    if (!list || list.length < 2) return null;
+    let pick;
+    do { pick = list[Math.floor(Math.random() * list.length)]; }
+    while (pick.id === currentId);
+    return pick;
+  }
+
   function playNextTrack() {
     if (state.activeEngine === 'library') {
       if (!state.libraryTracks.length) return;
-      const next = (state.currentLibraryTrackIdx + 1) % state.libraryTracks.length;
+      let next;
+      if (state.shuffle && state.libraryTracks.length > 1) {
+        do { next = Math.floor(Math.random() * state.libraryTracks.length); }
+        while (next === state.currentLibraryTrackIdx);
+      } else {
+        next = (state.currentLibraryTrackIdx + 1) % state.libraryTracks.length;
+      }
       playLibraryTrack(next);
     } else if (state.activeEngine === 'radio' && state.currentStationId) {
-      const next = stepList(getRadioCycleList(), state.currentStationId, 1);
+      const list = getRadioCycleList();
+      const next = state.shuffle ? randomOther(list, state.currentStationId) : stepList(list, state.currentStationId, 1);
       if (next) playStation(next.id);
     } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
-      const next = stepList(getVideoCycleList(), state.currentVideoId, 1);
+      const list = getVideoCycleList();
+      const next = state.shuffle ? randomOther(list, state.currentVideoId) : stepList(list, state.currentVideoId, 1);
       if (next) loadVideo(next.id, true);
     }
   }
@@ -2727,12 +2984,16 @@
 
   function updateTransportButtons() {
     let enabled = false;
+    let anyTrackLoaded = false;
     if (state.activeEngine === 'library') {
       enabled = state.libraryTracks.length > 1;
+      anyTrackLoaded = state.currentLibraryTrackIdx >= 0;
     } else if (state.activeEngine === 'radio' && state.currentStationId) {
       enabled = getRadioCycleList().length > 1;
+      anyTrackLoaded = true;
     } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
       enabled = getVideoCycleList().length > 1;
+      anyTrackLoaded = true;
     }
     // Prev also restarts a local track from >3s in even with a single-track queue.
     const prevEnabled = enabled || (state.activeEngine === 'library' && state.libraryTracks.length > 0);
@@ -2740,12 +3001,197 @@
     if (nextBtn) nextBtn.disabled = !enabled;
     if (npPrevBtn) npPrevBtn.disabled = !prevEnabled;
     if (npNextBtn) npNextBtn.disabled = !enabled;
+    if (npShuffleBtn) npShuffleBtn.disabled = !enabled;
+    // Repeat-one only needs a single loaded track, not a multi-item list.
+    if (npRepeatBtn) npRepeatBtn.disabled = !anyTrackLoaded;
   }
 
   if (prevBtn) prevBtn.addEventListener('click', playPrevTrack);
   if (nextBtn) nextBtn.addEventListener('click', playNextTrack);
   if (npPrevBtn) npPrevBtn.addEventListener('click', playPrevTrack);
   if (npNextBtn) npNextBtn.addEventListener('click', playNextTrack);
+
+  /* ---------------------------------------------------------------
+     SHUFFLE / REPEAT
+  --------------------------------------------------------------- */
+  function renderShuffleRepeatUI() {
+    if (npShuffleBtn) {
+      npShuffleBtn.classList.toggle('text-[#45A29E]', state.shuffle);
+      npShuffleBtn.setAttribute('aria-pressed', String(state.shuffle));
+    }
+    if (npRepeatBtn) {
+      npRepeatBtn.classList.toggle('text-[#45A29E]', state.repeat !== 'off');
+      npRepeatBtn.setAttribute('aria-pressed', String(state.repeat !== 'off'));
+    }
+    if (npRepeatOneDot) npRepeatOneDot.classList.toggle('hidden', state.repeat !== 'one');
+  }
+
+  if (npShuffleBtn) {
+    npShuffleBtn.addEventListener('click', () => {
+      state.shuffle = !state.shuffle;
+      renderShuffleRepeatUI();
+      toast(state.shuffle ? 'Shuffle on' : 'Shuffle off');
+    });
+  }
+
+  if (npRepeatBtn) {
+    npRepeatBtn.addEventListener('click', () => {
+      state.repeat = state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off';
+      renderShuffleRepeatUI();
+      toast(state.repeat === 'off' ? 'Repeat off' : state.repeat === 'all' ? 'Repeat all' : 'Repeat one');
+    });
+  }
+
+  renderShuffleRepeatUI();
+
+  /* ---------------------------------------------------------------
+     THREE-DOT MENU
+  --------------------------------------------------------------- */
+  if (npMenuBtn && npMenu) {
+    npMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willShow = npMenu.classList.contains('hidden');
+      npMenu.classList.toggle('hidden');
+      npMenuBtn.setAttribute('aria-expanded', String(willShow));
+    });
+    document.addEventListener('click', (e) => {
+      if (!npMenu.classList.contains('hidden') && !npMenu.contains(e.target) && e.target !== npMenuBtn) {
+        npMenu.classList.add('hidden');
+        npMenuBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  if (npMenuPlaylist) {
+    npMenuPlaylist.addEventListener('click', () => {
+      if (npMenu) npMenu.classList.add('hidden');
+      if (state.activeEngine === 'library' && state.currentLibraryTrackIdx >= 0) {
+        const track = state.libraryTracks[state.currentLibraryTrackIdx];
+        if (track && typeof openPlaylistSelector === 'function') openPlaylistSelector(track.id);
+      }
+    });
+  }
+
+  if (npMenuShare) {
+    npMenuShare.addEventListener('click', () => {
+      if (npMenu) npMenu.classList.add('hidden');
+      let url = window.location.href;
+      if (state.activeEngine === 'youtube' && state.currentVideoId) url = 'https://youtu.be/' + state.currentVideoId;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => toast('Link copied to clipboard')).catch(() => toast(url));
+      } else {
+        toast(url);
+      }
+    });
+  }
+
+  if (npMenuDsp) {
+    npMenuDsp.addEventListener('click', () => {
+      if (npMenu) npMenu.classList.add('hidden');
+      const dspModal = document.getElementById('dsp-modal');
+      if (dspModal) dspModal.classList.remove('hidden');
+    });
+  }
+
+  if (npArtistLink) {
+    npArtistLink.addEventListener('click', () => {
+      let artistName = '';
+      if (state.activeEngine === 'library' && state.currentLibraryTrackIdx >= 0) {
+        const track = state.libraryTracks[state.currentLibraryTrackIdx];
+        artistName = track ? track.artist : '';
+      } else if (state.activeEngine === 'youtube' && state.currentVideoId) {
+        const v = getVideo(state.currentVideoId);
+        artistName = v ? v.channel : '';
+      }
+      if (!artistName) return;
+      toast('Searching for ' + artistName + '…');
+      const headerSearch = document.getElementById('search-input');
+      if (headerSearch) headerSearch.value = artistName;
+      closeNowPlaying();
+      if (state.activeEngine === 'library') {
+        setView('explore');
+        switchLibraryTab('tracks');
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     QUEUE POPOVER (library queue only — radio/YouTube have no queue)
+  --------------------------------------------------------------- */
+  function renderNpQueue() {
+    if (!npQueueList) return;
+    if (state.activeEngine !== 'library' || !state.libraryTracks.length) {
+      npQueueList.innerHTML = '<p class="text-textSecondary text-sm text-center py-8 px-4">Queue is only available for your local library right now.</p>';
+      return;
+    }
+    npQueueList.innerHTML = state.libraryTracks.map((t, i) => `
+      <button data-idx="${i}" class="np-queue-item w-full text-left flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition-all ${i === state.currentLibraryTrackIdx ? 'bg-[#45A29E]/10' : ''}">
+        <span class="w-5 text-center text-xs flex-shrink-0 ${i === state.currentLibraryTrackIdx ? 'text-[#45A29E]' : 'text-textSecondary'}">
+          ${i === state.currentLibraryTrackIdx && state.playing ? '<i class="fa-solid fa-volume-high"></i>' : (i + 1)}
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm truncate ${i === state.currentLibraryTrackIdx ? 'text-[#45A29E] font-semibold' : 'text-white'}">${escapeHtml(t.title)}</span>
+          <span class="block text-xs text-textSecondary truncate">${escapeHtml(t.artist)}</span>
+        </span>
+      </button>
+    `).join('');
+    npQueueList.querySelectorAll('.np-queue-item').forEach(btn => {
+      btn.addEventListener('click', () => playLibraryTrack(parseInt(btn.dataset.idx, 10)));
+    });
+  }
+
+  if (npQueueBtn && npQueuePanel) {
+    npQueueBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willShow = npQueuePanel.classList.contains('hidden');
+      npQueuePanel.classList.toggle('hidden');
+      npQueuePanel.classList.toggle('flex', willShow);
+      npQueueBtn.setAttribute('aria-expanded', String(willShow));
+      if (willShow) renderNpQueue();
+    });
+  }
+  if (npQueueClose && npQueuePanel) {
+    npQueueClose.addEventListener('click', () => {
+      npQueuePanel.classList.add('hidden');
+      npQueuePanel.classList.remove('flex');
+      if (npQueueBtn) npQueueBtn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     FULLSCREEN / TV VIEW
+  --------------------------------------------------------------- */
+  if (npFullscreenBtn) {
+    npFullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        if (npScreen && npScreen.requestFullscreen) {
+          npScreen.requestFullscreen().catch(() => toast('Fullscreen not available'));
+        }
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const icon = npFullscreenBtn.querySelector('i');
+      if (icon) icon.className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     TITLE MARQUEE — measures real overflow rather than guessing
+  --------------------------------------------------------------- */
+  function updateNpMarquee() {
+    if (!npTitleWrap || !npTitle) return;
+    npTitleWrap.classList.remove('marquee');
+    npTitleWrap.style.removeProperty('--marquee-distance');
+    requestAnimationFrame(() => {
+      const overflow = npTitle.scrollWidth - npTitleWrap.clientWidth;
+      if (overflow > 8) {
+        npTitleWrap.style.setProperty('--marquee-distance', overflow + 'px');
+        npTitleWrap.classList.add('marquee');
+      }
+    });
+  }
 
   const heroPlayBtn = document.getElementById('hero-play');
   if (heroPlayBtn) heroPlayBtn.addEventListener('click', () => playStation('main'));
@@ -2795,10 +3241,19 @@
 
         if (npTitle) npTitle.textContent = station.name;
         if (npSubtitle) npSubtitle.textContent = station.genre + (station.dj ? ' · ' + station.dj : '');
+        if (npAlbumLabel) npAlbumLabel.textContent = 'Live Radio';
         if (npArt) {
-          npArt.className = 'w-56 h-56 md:w-72 md:h-72 rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br ' + station.colors + ' flex-shrink-0';
-          npArt.innerHTML = `<i class="fa-solid ${station.icon} text-white text-6xl md:text-7xl"></i>`;
+          npArt.className = 'relative w-60 h-60 sm:w-72 sm:h-72 lg:w-[22rem] lg:h-[22rem] rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br ' + station.colors + ' flex-shrink-0';
+          npArt.innerHTML = `<i class="fa-solid ${station.icon} text-white text-7xl"></i>`;
         }
+        if (npGlow) npGlow.className = 'absolute -top-1/3 left-1/2 -translate-x-1/2 w-[140%] md:w-[60%] h-1/2 blur-[110px] opacity-40 pointer-events-none bg-gradient-to-br ' + station.colors + ' transition-colors duration-500';
+        if (npArtGlow) {
+          npArtGlow.className = 'absolute inset-4 blur-3xl opacity-60 bg-gradient-to-br ' + station.colors + ' rounded-3xl transition-colors duration-500';
+          npArtGlow.style.backgroundImage = '';
+        }
+        if (npArtistLink) npArtistLink.disabled = true;
+        if (npMenuPlaylist) npMenuPlaylist.disabled = true;
+        updateNpMarquee();
         if (npLiveIndicator) {
           npLiveIndicator.classList.toggle('hidden', !isPlaying);
           npLiveIndicator.classList.toggle('flex', isPlaying);
@@ -2849,12 +3304,26 @@
 
         if (npTitle) npTitle.textContent = track.title;
         if (npSubtitle) npSubtitle.textContent = track.artist || 'Local Track';
+        if (npAlbumLabel) npAlbumLabel.textContent = 'Your Library';
         if (npArt) {
-          npArt.className = 'w-56 h-56 md:w-72 md:h-72 rounded-3xl shadow-2xl overflow-hidden relative flex-shrink-0 bg-cardBg flex items-center justify-center';
+          npArt.className = 'relative w-60 h-60 sm:w-72 sm:h-72 lg:w-[22rem] lg:h-[22rem] rounded-3xl shadow-2xl overflow-hidden flex-shrink-0 bg-cardBg flex items-center justify-center';
           npArt.innerHTML = track.artUrl
             ? `<img src="${track.artUrl}" class="w-full h-full object-cover" alt=""/>`
-            : `<i class="fa-solid fa-music text-white text-6xl md:text-7xl"></i>`;
+            : `<i class="fa-solid fa-music text-white text-7xl"></i>`;
         }
+        const libGlowClass = track.artUrl
+          ? 'absolute inset-4 blur-3xl opacity-60 bg-cover bg-center rounded-3xl transition-colors duration-500'
+          : 'absolute inset-4 blur-3xl opacity-60 bg-gradient-to-br from-accentRed to-orange-500 rounded-3xl transition-colors duration-500';
+        if (npArtGlow) {
+          npArtGlow.className = libGlowClass;
+          npArtGlow.style.backgroundImage = track.artUrl ? `url("${track.artUrl}")` : '';
+        }
+        if (npGlow) {
+          npGlow.className = 'absolute -top-1/3 left-1/2 -translate-x-1/2 w-[140%] md:w-[60%] h-1/2 blur-[110px] opacity-40 pointer-events-none bg-gradient-to-br from-accentRed to-orange-500 transition-colors duration-500';
+        }
+        if (npArtistLink) npArtistLink.disabled = !track.artist;
+        if (npMenuPlaylist) npMenuPlaylist.disabled = false;
+        updateNpMarquee();
         if (npLiveIndicator) npLiveIndicator.classList.add('hidden');
         if (npPlaypause) {
           npPlaypause.disabled = false;
@@ -2893,10 +3362,21 @@
 
         if (npTitle) npTitle.textContent = v.title;
         if (npSubtitle) npSubtitle.textContent = v.channel + ' · YouTube';
+        if (npAlbumLabel) npAlbumLabel.textContent = 'YouTube';
         if (npArt) {
-          npArt.className = 'w-56 h-56 md:w-72 md:h-72 rounded-3xl shadow-2xl overflow-hidden relative flex-shrink-0';
+          npArt.className = 'relative w-60 h-60 sm:w-72 sm:h-72 lg:w-[22rem] lg:h-[22rem] rounded-3xl shadow-2xl overflow-hidden flex-shrink-0';
           npArt.innerHTML = `<img src="${thumb}" class="w-full h-full object-cover" alt=""/>`;
         }
+        if (npArtGlow) {
+          npArtGlow.className = 'absolute inset-4 blur-3xl opacity-60 bg-cover bg-center rounded-3xl transition-colors duration-500';
+          npArtGlow.style.backgroundImage = `url("${thumb}")`;
+        }
+        if (npGlow) {
+          npGlow.className = 'absolute -top-1/3 left-1/2 -translate-x-1/2 w-[140%] md:w-[60%] h-1/2 blur-[110px] opacity-40 pointer-events-none bg-gradient-to-br from-red-600 to-accentRed transition-colors duration-500';
+        }
+        if (npArtistLink) npArtistLink.disabled = !v.channel;
+        if (npMenuPlaylist) npMenuPlaylist.disabled = true;
+        updateNpMarquee();
         if (npLiveIndicator) {
           npLiveIndicator.classList.toggle('hidden', !v.live);
           npLiveIndicator.classList.toggle('flex', v.live);
@@ -2932,10 +3412,21 @@
 
     if (npTitle) npTitle.textContent = 'Nothing playing';
     if (npSubtitle) npSubtitle.textContent = 'Pick a station or track to get started';
+    if (npAlbumLabel) npAlbumLabel.textContent = '—';
     if (npArt) {
-      npArt.className = 'w-56 h-56 md:w-72 md:h-72 rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br from-accentRed to-orange-500 flex-shrink-0';
-      npArt.innerHTML = '<i id="np-art-icon" class="fa-solid fa-radio text-white text-6xl md:text-7xl"></i>';
+      npArt.className = 'relative w-60 h-60 sm:w-72 sm:h-72 lg:w-[22rem] lg:h-[22rem] rounded-3xl shadow-2xl flex items-center justify-center bg-gradient-to-br from-accentRed to-orange-500 flex-shrink-0';
+      npArt.innerHTML = '<i id="np-art-icon" class="fa-solid fa-radio text-white text-7xl"></i>';
     }
+    if (npArtGlow) {
+      npArtGlow.className = 'absolute inset-4 blur-3xl opacity-60 bg-gradient-to-br from-accentRed to-orange-500 rounded-3xl transition-colors duration-500';
+      npArtGlow.style.backgroundImage = '';
+    }
+    if (npGlow) {
+      npGlow.className = 'absolute -top-1/3 left-1/2 -translate-x-1/2 w-[140%] md:w-[60%] h-1/2 blur-[110px] opacity-40 pointer-events-none bg-gradient-to-br from-accentRed to-orange-500 transition-colors duration-500';
+    }
+    if (npTitleWrap) { npTitleWrap.classList.remove('marquee'); npTitleWrap.style.removeProperty('--marquee-distance'); }
+    if (npArtistLink) npArtistLink.disabled = true;
+    if (npMenuPlaylist) npMenuPlaylist.disabled = true;
     if (npLiveIndicator) npLiveIndicator.classList.add('hidden');
     if (npPlaypause) npPlaypause.disabled = true;
     if (npLike) npLike.disabled = true;
@@ -2952,12 +3443,16 @@
       npScreen.classList.remove('translate-y-full');
       npScreen.classList.add('translate-y-0');
     });
+    refreshLyricsForCurrentSource();
+    renderNpQueue();
   }
 
   function closeNowPlaying() {
     if (!npScreen) return;
     npScreen.classList.remove('translate-y-0');
     npScreen.classList.add('translate-y-full');
+    if (npMenu) npMenu.classList.add('hidden');
+    if (npQueuePanel) npQueuePanel.classList.add('hidden');
     setTimeout(() => {
       npScreen.classList.add('hidden');
     }, 300);
@@ -3199,6 +3694,9 @@
     renderLibraryPlaylists();
   }
 
+  const LIB_TRACKS_EMPTY_DEFAULT_HTML = (document.getElementById('lib-tracks-empty') || {}).innerHTML || '';
+  const LIB_FAVS_EMPTY_DEFAULT_HTML = (document.getElementById('lib-favs-empty') || {}).innerHTML || '';
+
   function renderLibraryTracks() {
     const emptyEl = document.getElementById('lib-tracks-empty');
     const containerEl = document.getElementById('lib-tracks-container');
@@ -3206,7 +3704,22 @@
     if (!emptyEl || !containerEl || !listEl) return;
 
     if (state.libraryTracks.length === 0) {
+      emptyEl.innerHTML = LIB_TRACKS_EMPTY_DEFAULT_HTML;
       emptyEl.classList.remove('hidden');
+      containerEl.classList.add('hidden');
+      return;
+    }
+
+    const q = state.librarySearchQuery.trim().toLowerCase();
+    const visibleTracks = q
+      ? state.libraryTracks
+          .map((track, i) => ({ track, i }))
+          .filter(({ track }) => track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q))
+      : state.libraryTracks.map((track, i) => ({ track, i }));
+
+    if (visibleTracks.length === 0) {
+      emptyEl.classList.remove('hidden');
+      emptyEl.innerHTML = `<p class="text-textSecondary text-sm text-center py-10">No tracks match "${escapeHtml(state.librarySearchQuery)}".</p>`;
       containerEl.classList.add('hidden');
       return;
     }
@@ -3214,7 +3727,7 @@
     emptyEl.classList.add('hidden');
     containerEl.classList.remove('hidden');
 
-    listEl.innerHTML = state.libraryTracks.map((track, i) => {
+    listEl.innerHTML = visibleTracks.map(({ track, i }) => {
       const isThisPlaying = state.activeEngine === 'library' && state.currentLibraryTrackIdx === i && state.playing;
       return `
       <div class="group flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-borderWhite/40 transition-all cursor-pointer ${isThisPlaying ? 'bg-accentRed/10 border-accentRed/40' : ''}" data-track-idx="${i}">
@@ -3254,9 +3767,14 @@
     const listEl = document.getElementById('lib-favs-list');
     if (!emptyEl || !containerEl || !listEl) return;
 
-    const favs = state.libraryTracks.filter(t => t.liked);
+    const q = state.librarySearchQuery.trim().toLowerCase();
+    let favs = state.libraryTracks.filter(t => t.liked);
+    if (q) favs = favs.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
 
     if (favs.length === 0) {
+      emptyEl.innerHTML = q
+        ? `<p class="text-textSecondary text-sm text-center py-10">No liked songs match "${escapeHtml(state.librarySearchQuery)}".</p>`
+        : LIB_FAVS_EMPTY_DEFAULT_HTML;
       emptyEl.classList.remove('hidden');
       containerEl.classList.add('hidden');
       return;
@@ -3306,7 +3824,7 @@
         const track = state.libraryTracks.find(t => t.id === id);
         if (!track) return;
         track.liked = !track.liked;
-        await dbPut('meta', { id: track.id, title: track.title, artist: track.artist, duration: track.duration, liked: track.liked, artB64: track.artB64 });
+        await saveTrackMeta(track);
         renderLibraryUI();
         renderSourceAwarePlayerBar();
         toast(track.liked ? 'Added to Liked Songs' : 'Removed from Liked Songs');
@@ -3751,6 +4269,13 @@
     bindStationButtons();
   }
 
+  function onTrackChanged() {
+    if (npScreen && !npScreen.classList.contains('hidden')) {
+      refreshLyricsForCurrentSource();
+      renderNpQueue();
+    }
+  }
+
   function playStation(id) {
     const station = getStation(id);
     if (!station) return;
@@ -3763,6 +4288,7 @@
     renderStationGrids();
     connectActiveAudioToAnalyser();
     startVisualizer();
+    onTrackChanged();
   }
 
   function tryLoadStation(station, urlIndex) {
@@ -3829,6 +4355,7 @@
     renderUpNext();
     renderExploreVideoGrid();
     startVisualizer();
+    onTrackChanged();
   }
 
   if (ytLikeBtn) {
@@ -3943,16 +4470,9 @@
   }
 
   function filterLibraryTracks(query) {
-    const listEl = document.getElementById('lib-tracks-list');
-    if (!listEl) return;
-    const q = query.toLowerCase();
-    listEl.querySelectorAll('[data-track-idx]').forEach(el => {
-      const idx = parseInt(el.dataset.trackIdx, 10);
-      const trk = state.libraryTracks[idx];
-      if (!trk) return;
-      const match = !q || trk.title.toLowerCase().includes(q) || trk.artist.toLowerCase().includes(q);
-      el.style.display = match ? '' : 'none';
-    });
+    state.librarySearchQuery = query;
+    renderLibraryTracks();
+    renderLibraryFavs();
   }
 
   /* ---------------------------------------------------------------
