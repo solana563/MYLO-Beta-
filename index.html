@@ -257,6 +257,56 @@
     </section>
   </section>
 
+  <!-- ===================== EXPLORE / ARTIST DISCOVERY VIEW ===================== -->
+  <section id="view-discover" class="view px-5 py-6 space-y-8">
+    <section>
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-textSecondary text-sm"></i>
+        <input id="discover-search-input" type="text" placeholder="Search any artist..." class="w-full glass rounded-xl pl-11 pr-4 py-3 text-sm outline-none placeholder-textSecondary focus:border-accentRed border border-transparent" />
+      </div>
+    </section>
+
+    <section id="discover-empty" class="glass-card rounded-3xl p-10 flex flex-col items-center justify-center text-center">
+      <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20 text-3xl mb-4">
+        <i class="fa-solid fa-compass"></i>
+      </div>
+      <h3 class="font-bold text-sm mb-1">Discover an Artist</h3>
+      <p class="text-[11px] text-textSecondary max-w-[220px]">Search any artist to see their biography, top songs, and similar artists.</p>
+    </section>
+
+    <section id="discover-loading" class="hidden space-y-6">
+      <div class="skeleton h-48 rounded-3xl"></div>
+      <div class="skeleton h-24 rounded-2xl"></div>
+      <div class="skeleton h-16 rounded-2xl"></div>
+    </section>
+
+    <section id="discover-results" class="hidden space-y-8">
+      <!-- Artist header -->
+      <div id="discover-artist-header" class="relative rounded-3xl overflow-hidden min-h-[220px] flex items-end shadow-2xl glass-card"></div>
+
+      <!-- Biography -->
+      <div id="discover-bio-wrap" class="hidden">
+        <h2 class="text-lg font-bold mb-3 px-1">Biography</h2>
+        <div class="glass-card rounded-2xl p-5">
+          <p id="discover-bio-text" class="text-sm text-textSecondary leading-relaxed"></p>
+          <button id="discover-bio-toggle" class="hidden text-accentRed text-xs font-bold mt-3">Read more</button>
+        </div>
+      </div>
+
+      <!-- Popular songs -->
+      <div>
+        <h2 class="text-lg font-bold mb-4 px-1">Popular Songs</h2>
+        <div id="discover-songs-list" class="space-y-3"></div>
+      </div>
+
+      <!-- Similar artists -->
+      <div id="discover-similar-wrap" class="hidden">
+        <h2 class="text-lg font-bold mb-4 px-1">Fans Also Like</h2>
+        <div id="discover-similar-list" class="flex gap-4 overflow-x-auto pb-2 -mx-5 px-5 no-scrollbar"></div>
+      </div>
+    </section>
+  </section>
+
   <!-- ===================== VIDEO / YOUTUBE VIEW ===================== -->
   <section id="view-video" class="view">
     <section class="space-y-4">
@@ -421,6 +471,10 @@
     <button data-view="explore" class="nav-item active flex flex-col items-center gap-1 text-accentRed flex-1" aria-label="Listen Now">
       <i class="fa-solid fa-play text-xl"></i>
       <span class="text-[10px] font-bold">Listen Now</span>
+    </button>
+    <button data-view="discover" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Explore">
+      <i class="fa-solid fa-compass text-xl"></i>
+      <span class="text-[10px] font-medium">Explore</span>
     </button>
     <button data-view="video" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Videos">
       <i class="fa-brands fa-youtube text-xl"></i>
@@ -1601,6 +1655,226 @@ function playNextVideoInList(current, listContext) {
 }
 
 /* =====================================================================
+   EXPLORE — Artist discovery: biography, popular songs, similar artists.
+   Biography/photo come from TheAudioDB's public test endpoint (key
+   "123", the current free test key TheAudioDB publishes for exactly
+   this kind of non-commercial testing/use — no signup needed, capped
+   at 30 requests/min). Song and similar-artist data comes from the
+   iTunes Search API, already used elsewhere in the app for artwork.
+   Playing a song here always resolves it on YouTube and plays it in
+   the Video view, per how this section is meant to work.
+   ===================================================================== */
+const AUDIODB_KEY = '123'; // TheAudioDB's official public test key (see theaudiodb.com/free_music_api)
+const ArtistDiscoverAPI = (() => {
+  async function bio(name) {
+    try {
+      const res = await fetch(`https://www.theaudiodb.com/api/v1/json/${AUDIODB_KEY}/search.php?s=${encodeURIComponent(name)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.artists && data.artists[0]) || null;
+    } catch (e) { return null; }
+  }
+  async function iTunesArtist(name) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&media=music&entity=musicArtist&limit=1`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.results && data.results[0]) || null;
+    } catch (e) { return null; }
+  }
+  async function songsByArtist(artistId, name, limit = 12) {
+    // Prefer a direct lookup by the artist's real iTunes ID — far more
+    // reliable than text search, since it can't mismatch on spelling/attribute.
+    if (artistId) {
+      try {
+        const res = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=song&limit=${limit + 5}`);
+        if (res.ok) {
+          const data = await res.json();
+          const tracks = (data.results || []).filter(r => r.wrapperType === 'track' && r.kind === 'song');
+          if (tracks.length) return tracks.slice(0, limit);
+        }
+      } catch (e) { /* fall through to text search below */ }
+    }
+    // Fallback: broad term search (no attribute restriction — that was too strict and often returned nothing)
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&media=music&entity=song&limit=${limit}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.results || []).filter(r => r.wrapperType === 'track' && r.kind === 'song');
+    } catch (e) { return []; }
+  }
+  async function artistsByGenre(genre, limit = 10) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(genre)}&media=music&entity=musicArtist&limit=${limit}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.results || [];
+    } catch (e) { return []; }
+  }
+  return { bio, iTunesArtist, songsByArtist, artistsByGenre };
+})();
+
+let discoverSearchToken = 0;
+async function runArtistDiscovery(rawName) {
+  const name = rawName.trim();
+  if (!name) return;
+  const myToken = ++discoverSearchToken; // guards against out-of-order responses from rapid re-searches
+  $('#discover-empty').classList.add('hidden');
+  $('#discover-results').classList.add('hidden');
+  $('#discover-loading').classList.remove('hidden');
+
+  const [audioDbArtist, itunesArtist] = await Promise.all([
+    ArtistDiscoverAPI.bio(name),
+    ArtistDiscoverAPI.iTunesArtist(name),
+  ]);
+  if (myToken !== discoverSearchToken) return; // a newer search superseded this one
+
+  if (!audioDbArtist && !itunesArtist) {
+    $('#discover-loading').classList.add('hidden');
+    $('#discover-empty').classList.remove('hidden');
+    $('#discover-empty').innerHTML = `
+      <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20 text-3xl mb-4"><i class="fa-solid fa-user-slash"></i></div>
+      <h3 class="font-bold text-sm mb-1">No artist found</h3>
+      <p class="text-[11px] text-textSecondary max-w-[220px]">Try checking the spelling or searching a different artist.</p>`;
+    return;
+  }
+
+  const displayName = audioDbArtist?.strArtist || itunesArtist?.artistName || name;
+  const genre = itunesArtist?.primaryGenreName || audioDbArtist?.strGenre || '';
+  const photo = audioDbArtist?.strArtistThumb || audioDbArtist?.strArtistFanart || null;
+
+  const [songs, similarRaw] = await Promise.all([
+    ArtistDiscoverAPI.songsByArtist(itunesArtist?.artistId, displayName, 10),
+    genre ? ArtistDiscoverAPI.artistsByGenre(genre, 12) : Promise.resolve([]),
+  ]);
+  if (myToken !== discoverSearchToken) return;
+
+  const similar = similarRaw
+    .filter(a => a.artistName && a.artistName.toLowerCase() !== displayName.toLowerCase())
+    .filter((a, i, arr) => arr.findIndex(x => x.artistName === a.artistName) === i)
+    .slice(0, 8);
+
+  // Give each similar artist a representative image (a cover from one of their songs)
+  const similarWithArt = await Promise.all(similar.map(async (a) => {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(a.artistName)}&media=music&entity=song&limit=1`);
+      const data = res.ok ? await res.json() : null;
+      const art = data?.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null;
+      return { name: a.artistName, art };
+    } catch (e) { return { name: a.artistName, art: null }; }
+  }));
+  if (myToken !== discoverSearchToken) return;
+
+  $('#discover-loading').classList.add('hidden');
+  $('#discover-results').classList.remove('hidden');
+  renderArtistHeader(displayName, audioDbArtist, genre, photo);
+  renderArtistBio(audioDbArtist);
+  renderArtistSongs(songs, displayName);
+  renderSimilarArtists(similarWithArt);
+  $('#app-scroll').scrollTop = 0;
+}
+
+function renderArtistHeader(name, audioDbArtist, genre, photo) {
+  const box = $('#discover-artist-header');
+  const formed = audioDbArtist?.intFormedYear;
+  const tags = [genre, audioDbArtist?.strStyle, audioDbArtist?.strMood].filter(Boolean).slice(0, 3);
+  box.innerHTML = `
+    ${photo ? `<img class="absolute inset-0 w-full h-full object-cover" src="${photo}" onerror="this.remove()" alt="" />` : ''}
+    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10"></div>
+    <div class="relative z-10 p-6 w-full">
+      <h2 class="text-3xl font-extrabold mb-2 tracking-tight truncate">${escapeHtml(name)}</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        ${formed ? `<span class="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-white/80">Since ${escapeHtml(String(formed))}</span>` : ''}
+        ${tags.map(t => `<span class="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-white/80 capitalize">${escapeHtml(t)}</span>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderArtistBio(audioDbArtist) {
+  const wrap = $('#discover-bio-wrap');
+  const bioText = audioDbArtist?.strBiography;
+  if (!bioText) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const p = $('#discover-bio-text');
+  const toggle = $('#discover-bio-toggle');
+  p.textContent = bioText;
+  p.classList.add('line-clamp-4');
+  toggle.textContent = 'Read more';
+  toggle.classList.toggle('hidden', bioText.length < 280);
+  toggle.onclick = () => {
+    const collapsed = p.classList.toggle('line-clamp-4');
+    toggle.textContent = collapsed ? 'Read more' : 'Show less';
+  };
+}
+
+function renderArtistSongs(songs, artistName) {
+  const list = $('#discover-songs-list');
+  list.innerHTML = '';
+  if (!songs.length) { list.appendChild(el('div', '', emptyStateHtml('x', 'fa-music', 'No songs found', 'Try a more specific artist name.'))); return; }
+  songs.forEach(s => {
+    const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+    const art = s.artworkUrl100 ? s.artworkUrl100.replace('100x100', '160x160') : null;
+    row.innerHTML = `
+      <div class="w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center flex-shrink-0">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-music text-white/30'}))" />` : `<i class="fa-solid fa-music text-white/30"></i>`}
+      </div>
+      <div class="flex-1 min-w-0">
+        <h4 class="text-sm font-bold truncate">${escapeHtml(s.trackName || 'Untitled')}</h4>
+        <p class="text-[11px] text-textSecondary truncate">${escapeHtml(s.collectionName || artistName)}</p>
+      </div>
+      <span class="discover-play-icon w-9 h-9 rounded-full bg-white text-black flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-play ml-0.5 text-xs"></i></span>`;
+    row.addEventListener('click', () => playArtistSongOnYouTube(row, artistName, s.trackName));
+    list.appendChild(row);
+  });
+}
+
+function renderSimilarArtists(similar) {
+  const wrap = $('#discover-similar-wrap');
+  const list = $('#discover-similar-list');
+  list.innerHTML = '';
+  if (!similar.length) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  similar.forEach(a => {
+    const card = el('button', 'flex-shrink-0 w-28 text-center');
+    card.innerHTML = `
+      <div class="w-24 h-24 rounded-full overflow-hidden bg-white/5 flex items-center justify-center mb-2 mx-auto">
+        ${a.art ? `<img class="w-full h-full object-cover" src="${a.art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-user text-2xl text-white/30'}))" />` : `<i class="fa-solid fa-user text-2xl text-white/30"></i>`}
+      </div>
+      <p class="text-xs font-bold truncate">${escapeHtml(a.name)}</p>`;
+    card.addEventListener('click', () => { $('#discover-search-input').value = a.name; runArtistDiscovery(a.name); });
+    list.appendChild(card);
+  });
+}
+
+/* Tapping a song in Explore resolves it on YouTube and plays it there. */
+async function playArtistSongOnYouTube(rowEl, artistName, trackName) {
+  const iconWrap = rowEl.querySelector('.discover-play-icon');
+  const original = iconWrap.innerHTML;
+  iconWrap.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i>';
+  try {
+    const results = await YouTubeAPI.search(`${artistName} ${trackName}`, 1);
+    if (!results.length) { toast('Could not find this song on YouTube'); iconWrap.innerHTML = original; return; }
+    const video = { ...results[0], title: results[0].title || `${trackName} - ${artistName}` };
+    await playVideo(video, [video]);
+  } catch (e) {
+    toast('Could not play this song');
+    iconWrap.innerHTML = original;
+  }
+}
+
+/* Search wiring */
+let discoverDebounce = null;
+$('#discover-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { clearTimeout(discoverDebounce); runArtistDiscovery(e.target.value); }
+});
+$('#discover-search-input').addEventListener('input', (e) => {
+  clearTimeout(discoverDebounce);
+  const q = e.target.value.trim();
+  if (!q) return;
+  discoverDebounce = setTimeout(() => runArtistDiscovery(q), 700);
+});
+
+/* =====================================================================
    VIEW: RADIO
    ===================================================================== */
 async function loadRadioView() {
@@ -1998,6 +2272,7 @@ $('#edit-save-btn').addEventListener('click', async () => {
    ===================================================================== */
 const VIEW_META = {
   explore: { title: 'Listen Now', icon: 'fa-record-vinyl' },
+  discover: { title: 'Explore', icon: 'fa-solid fa-compass' },
   video: { title: 'Videos', icon: 'fa-brands fa-youtube' },
   radio: { title: 'Radio', icon: 'fa-solid fa-tower-broadcast' },
   library: { title: 'Your Library', icon: 'fa-solid fa-layer-group' },
@@ -2016,6 +2291,7 @@ function switchView(name) {
     if (name === 'radio') loadRadioView();
     if (name === 'video') loadVideoView('trending music');
     if (name === 'library') loadLibraryView();
+    // 'discover' has no default load — it starts on the empty/prompt state until searched
   } else if (name === 'library') {
     loadLibraryView(); // library changes often (uploads) — always refresh
   }
