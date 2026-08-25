@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MYLO — My Music My Way</title>
+<title>MYLO — Discover Your Sound</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%275%27%20fill%3D%27%23fa243c%27%2F%3E%3Csvg%20x%3D%271%27%20y%3D%271%27%20width%3D%2722%27%20height%3D%2722%27%20viewBox%3D%27222%20188%20610%20610%27%3E%3Cg%20fill%3D%27white%27%3E%3Cg%20transform%3D%27translate%280%2C1024%29%20scale%280.1%2C-0.1%29%27%3E%0A%3Cpath%20d%3D%27M4975%207798%20c-229%20-25%20-547%20-112%20-765%20-208%20-487%20-214%20-936%20-607%20-1208%0A-1057%20-372%20-615%20-476%20-1366%20-286%20-2058%2064%20-232%20157%20-456%20229%20-555%20122%20-167%0A365%20-221%20560%20-126%20144%2071%20231%20195%20255%20363%2013%2092%20-3%20174%20-70%20373%20-99%20295%20-131%0A490%20-125%20770%206%20313%2067%20565%20199%20828%20259%20516%20728%20862%201311%20968%20119%2022%20416%2030%0A541%2015%20463%20-55%20871%20-257%201205%20-598%20283%20-288%20462%20-639%20533%20-1047%2020%20-112%2049%0A-177%20103%20-227%2059%20-54%20104%20-72%20183%20-73%20125%20-1%20224%2074%20262%20197%2019%2064%2020%2076%208%0A161%20-86%20649%20-421%201251%20-930%201672%20-406%20336%20-879%20538%20-1400%20599%20-137%2016%20-474%2018%0A-605%203z%27%2F%3E%0A%3Cpath%20d%3D%27M4428%204166%20c-96%20-26%20-168%20-95%20-231%20-221%20-56%20-113%20-70%20-162%20-75%20-271%0A-7%20-171%2046%20-299%20183%20-443%20183%20-191%20468%20-334%20780%20-392%20153%20-29%20420%20-31%20562%20-5%0A517%2093%20974%20431%201139%20841%2024%2060%2028%2084%2028%20170%200%2082%20-4%20110%20-23%20159%20-59%20148%20-200%0A208%20-332%20140%20-37%20-18%20-103%20-74%20-204%20-174%20-195%20-192%20-283%20-250%20-450%20-303%20-328%0A-102%20-687%20-28%20-946%20194%20-38%2033%20-104%20103%20-147%20157%20-111%20139%20-182%20175%20-284%20148z%27%2F%3E%0A%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E%3C%2Fsvg%3E">
 <meta name="theme-color" content="#050505">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -27,6 +27,7 @@
     darkMode: 'class',
     theme: {
       extend: {
+        screens: { lg: '900px' }, // matches this file's own desktop breakpoint, set in the CSS block below
         fontFamily: { sans: ['Inter', 'sans-serif'] },
         colors: {
           appBg: '#050505',
@@ -67,13 +68,95 @@
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
   :focus-visible { outline: 2px solid #fa243c; outline-offset: 2px; border-radius: 4px; }
 
-  /* App shell: phone-frame on desktop, full-bleed on mobile */
+  /* App shell: phone-frame up to tablet, real desktop layout from 900px up */
   #app-shell { max-width: 480px; margin: 0 auto; position: relative; min-height: 100vh; min-height: 100dvh; }
-  @media (min-width: 640px) {
+  @media (min-width: 640px) and (max-width: 899px) {
     #app-shell { min-height: 90vh; margin-top: 5vh; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 90px -20px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.08); }
     #app-scroll { max-height: 90vh; }
   }
   #app-scroll { overflow-y: auto; }
+
+  /* ---- Desktop (>=900px): drop the phone card, add a left sidebar ---- */
+  @media (min-width: 900px) {
+    #app-shell { max-width: none; margin: 0; min-height: 100vh; padding-left: 248px; }
+    #app-scroll { max-height: none; padding-bottom: 2rem; }
+
+    #app-shell-bottom {
+      max-width: none !important;
+      margin: 0 !important;
+      position: fixed;
+      left: 0; right: auto; top: 0; bottom: 0;
+      width: 248px;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px 20px;
+      background: rgba(10, 10, 10, 0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    html.light #app-shell-bottom { background: rgba(255, 255, 255, 0.7); border-right: 1px solid rgba(0, 0, 0, 0.06); }
+    #sidebar-brand { display: flex !important; order: 0; }
+    nav.app-bottom-nav {
+      order: 1;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+      gap: 4px;
+      padding: 8px 0 !important;
+      height: auto;
+    }
+    #mini-player-wrap { order: 2; margin-top: auto; padding: 0; }
+    .nav-item {
+      flex-direction: row !important;
+      justify-content: flex-start !important;
+      align-items: center !important;
+      gap: 14px !important;
+      padding: 11px 14px !important;
+      border-radius: 12px;
+      flex: none !important;
+    }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.06); }
+    .nav-item span { font-size: 13px; }
+
+    header, #app-scroll > .view { max-width: 1120px; margin-left: auto; margin-right: auto; }
+    header { padding-left: 2rem !important; padding-right: 2rem !important; }
+
+    /* Now Playing becomes a real centered modal instead of a stretched mobile sheet.
+       It also switches from the mobile "slide up" animation (translateY, which is
+       relative to the element's own height) to a fade+scale — translateY(100%) no
+       longer lands fully off-screen once the sheet is ~88vh instead of 100vh tall,
+       which left a sliver of it visible even when closed. */
+    #now-playing-sheet {
+      max-width: 920px !important;
+      margin: 0 auto !important;
+      top: 6vh; bottom: 6vh; left: 0; right: 0;
+      border-radius: 28px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 40px 48px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    /* Blur the app content behind the Now Playing modal on desktop/landscape,
+       since it floats as a centered card rather than covering the full screen. */
+    #overlay:has(+ #now-playing-sheet.open) {
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(24px) saturate(130%);
+      -webkit-backdrop-filter: blur(24px) saturate(130%);
+      transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+    }
+  }
 
   .view { display: none; }
   .view.active { display: block; }
@@ -230,7 +313,7 @@
         <h2 class="text-xl font-bold">Quick Picks</h2>
         <button class="explore-see-all-radio text-accentRed text-sm font-semibold">See All</button>
       </div>
-      <div id="quick-picks-grid" class="grid grid-cols-2 gap-4">
+      <div id="quick-picks-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="skeleton aspect-square rounded-2xl"></div>
         <div class="skeleton aspect-square rounded-2xl"></div>
       </div>
@@ -250,7 +333,7 @@
         <h2 class="text-xl font-bold flex items-center gap-2"><i class="fa-brands fa-youtube text-red-600"></i> Trending</h2>
         <button class="explore-see-all-video text-accentRed text-sm font-semibold">See All</button>
       </div>
-      <div id="trending-video-list" class="space-y-4">
+      <div id="trending-video-list" class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4">
         <div class="skeleton h-16 rounded-2xl"></div>
         <div class="skeleton h-16 rounded-2xl"></div>
       </div>
@@ -296,7 +379,7 @@
       <!-- Popular songs -->
       <div>
         <h2 class="text-lg font-bold mb-4 px-1">Popular Songs</h2>
-        <div id="discover-songs-list" class="space-y-3"></div>
+        <div id="discover-songs-list" class="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3"></div>
       </div>
 
       <!-- Similar artists -->
@@ -330,7 +413,7 @@
         <button data-q="live concert full" class="video-cat flex-shrink-0 px-5 py-2 glass rounded-2xl font-semibold text-sm">Concerts</button>
       </div>
       <h2 class="text-lg font-bold mb-4" id="video-list-heading">Trending Now</h2>
-      <div id="video-list" class="space-y-6 pb-6">
+      <div id="video-list" class="space-y-6 pb-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6">
         <div class="skeleton h-20 rounded-xl"></div>
         <div class="skeleton h-20 rounded-xl"></div>
       </div>
@@ -370,7 +453,7 @@
       <div class="flex items-center justify-between mb-4 px-1">
         <h2 class="text-lg font-bold">Top Stations</h2>
       </div>
-      <div id="radio-top-list" class="space-y-3">
+      <div id="radio-top-list" class="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3">
         <div class="skeleton h-16 rounded-2xl"></div>
         <div class="skeleton h-16 rounded-2xl"></div>
       </div>
@@ -416,7 +499,7 @@
             <div class="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden"><div id="library-add-progress-bar" class="h-full bg-accentRed rounded-full transition-all" style="width:0%"></div></div>
           </div>
         </div>
-        <div id="library-songs-list" class="space-y-3"></div>
+        <div id="library-songs-list" class="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3"></div>
       </div>
 
       <div id="lib-liked-panel" class="lib-panel hidden space-y-3"></div>
@@ -424,12 +507,12 @@
 
       <!-- Artists: grid of artist cards -->
       <div id="lib-artists-panel" class="lib-panel hidden">
-        <div id="lib-artists-grid" class="grid grid-cols-2 gap-4"></div>
+        <div id="lib-artists-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
       </div>
 
       <!-- Albums: grid of album cards -->
       <div id="lib-albums-panel" class="lib-panel hidden">
-        <div id="lib-albums-grid" class="grid grid-cols-2 gap-4"></div>
+        <div id="lib-albums-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
       </div>
 
       <!-- Drill-down: songs by a specific artist/album -->
@@ -446,20 +529,38 @@
 
 <!-- ===================== PLAYER & NAV ===================== -->
 <div class="fixed bottom-0 left-0 right-0 z-40" id="app-shell-bottom" style="max-width:480px; margin:0 auto;">
+  <!-- SIDEBAR BRAND (desktop only) -->
+  <div id="sidebar-brand" class="hidden items-center gap-2 py-8 px-2 flex-shrink-0">
+    <svg viewBox="222 188 610 610" class="w-8 h-8 text-accentRed flex-shrink-0" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,1024) scale(0.1,-0.1)"><path d="M4975 7798 c-229 -25 -547 -112 -765 -208 -487 -214 -936 -607 -1208
+-1057 -372 -615 -476 -1366 -286 -2058 64 -232 157 -456 229 -555 122 -167
+365 -221 560 -126 144 71 231 195 255 363 13 92 -3 174 -70 373 -99 295 -131
+490 -125 770 6 313 67 565 199 828 259 516 728 862 1311 968 119 22 416 30
+541 15 463 -55 871 -257 1205 -598 283 -288 462 -639 533 -1047 20 -112 49
+-177 103 -227 59 -54 104 -72 183 -73 125 -1 224 74 262 197 19 64 20 76 8
+161 -86 649 -421 1251 -930 1672 -406 336 -879 538 -1400 599 -137 16 -474 18
+-605 3z"/>
+<path d="M4428 4166 c-96 -26 -168 -95 -231 -221 -56 -113 -70 -162 -75 -271
+-7 -171 46 -299 183 -443 183 -191 468 -334 780 -392 153 -29 420 -31 562 -5
+517 93 974 431 1139 841 24 60 28 84 28 170 0 82 -4 110 -23 159 -59 148 -200
+208 -332 140 -37 -18 -103 -74 -204 -174 -195 -192 -283 -250 -450 -303 -328
+-102 -687 -28 -946 194 -38 33 -104 103 -147 157 -111 139 -182 175 -284 148z"/></g></svg>
+    <span class="text-lg font-bold tracking-tight">MYLO</span>
+  </div>
+
   <!-- MINI PLAYER -->
-  <div class="px-4 mb-2">
-    <button id="mini-player" class="hidden w-full glass h-16 rounded-2xl px-4 flex items-center justify-between shadow-2xl border-white/20">
-      <div class="flex items-center gap-3 overflow-hidden min-w-0">
-        <div id="mini-art-wrap" class="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden bg-accentRed flex items-center justify-center">
+  <div class="px-4 mb-2 lg:px-0" id="mini-player-wrap">
+    <button id="mini-player" class="hidden w-full glass h-16 lg:h-auto rounded-2xl px-4 lg:px-3 lg:py-3 flex items-center lg:flex-col lg:items-stretch justify-between lg:justify-start gap-0 lg:gap-3 shadow-2xl border-white/20">
+      <div class="flex items-center lg:flex-col lg:items-stretch gap-3 lg:gap-3 overflow-hidden min-w-0">
+        <div id="mini-art-wrap" class="w-10 h-10 lg:w-full lg:aspect-square lg:h-auto rounded-lg lg:rounded-xl flex-shrink-0 overflow-hidden bg-accentRed flex items-center justify-center">
           <img id="mini-art" class="w-full h-full object-cover hidden" />
-          <i id="mini-art-icon" class="fa-solid fa-radio text-white text-sm"></i>
+          <i id="mini-art-icon" class="fa-solid fa-radio text-white text-sm lg:text-2xl"></i>
         </div>
-        <div class="truncate text-left">
+        <div class="truncate text-left lg:text-center lg:px-1">
           <h4 id="mini-title" class="text-sm font-bold truncate">Nothing playing</h4>
           <p id="mini-subtitle" class="text-[10px] text-textSecondary truncate">Pick something to listen to</p>
         </div>
       </div>
-      <div class="flex items-center gap-4 flex-shrink-0">
+      <div class="flex items-center gap-4 lg:gap-6 lg:justify-center flex-shrink-0">
         <span id="mini-playpause" class="text-white text-xl w-6 text-center"><i class="fa-solid fa-play"></i></span>
         <span id="mini-next" class="text-white text-xl w-6 text-center"><i class="fa-solid fa-forward-step"></i></span>
       </div>
@@ -467,7 +568,7 @@
   </div>
 
   <!-- BOTTOM NAV -->
-  <nav class="glass-dark px-6 py-3 flex items-center justify-between">
+  <nav class="app-bottom-nav glass-dark px-6 py-3 flex items-center justify-between">
     <button data-view="explore" class="nav-item active flex flex-col items-center gap-1 text-accentRed flex-1" aria-label="Listen Now">
       <i class="fa-solid fa-play text-xl"></i>
       <span class="text-[10px] font-bold">Listen Now</span>
@@ -501,64 +602,73 @@
       <p id="np-source-label" class="text-[10px] font-bold uppercase tracking-widest text-textSecondary">Playing</p>
       <h1 id="np-source-name" class="text-xs font-bold">—</h1>
     </div>
-    <button id="np-menu-btn" class="text-white text-xl w-10 h-10 flex items-center justify-center" aria-label="More options"><i class="fa-solid fa-ellipsis"></i></button>
+    <div class="flex items-center gap-1">
+      <button id="np-visualizer-toggle" class="text-white text-lg w-10 h-10 flex items-center justify-center" aria-label="Toggle visualizer"><i class="fa-solid fa-waveform-lines"></i></button>
+      <button id="np-menu-btn" class="text-white text-xl w-10 h-10 flex items-center justify-center" aria-label="More options"><i class="fa-solid fa-ellipsis"></i></button>
+    </div>
   </header>
 
-  <section class="flex-1 flex flex-col justify-center mb-6 overflow-hidden">
-    <div class="aspect-square w-full rounded-2xl overflow-hidden mb-6 adaptive-glow bg-gradient-to-br from-accentRed/40 to-purple-700/40 flex items-center justify-center flex-shrink-0">
-      <img id="np-art" crossorigin="anonymous" class="w-full h-full object-cover hidden" />
-      <i id="np-art-fallback" class="fa-solid fa-compact-disc text-white/50 text-6xl spin-slow"></i>
-    </div>
-
-    <div class="flex items-center justify-between gap-4">
-      <div class="min-w-0 flex-1 overflow-hidden">
-        <h2 id="np-title" class="text-xl font-extrabold truncate">Nothing playing</h2>
-        <p id="np-subtitle" class="text-textSecondary font-medium truncate text-sm">Pick a station, song, or video</p>
-      </div>
-      <button id="np-like-btn" class="text-2xl text-white flex-shrink-0" aria-label="Save"><i class="fa-regular fa-heart"></i></button>
-    </div>
-  </section>
-
-  <section class="mb-4 flex-shrink-0">
-    <div id="np-progress-track" class="w-full h-1 bg-white/25 rounded-full relative group cursor-pointer mb-2">
-      <div id="np-progress-bar" class="adaptive-bar h-full w-0 rounded-full relative">
-        <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-lg"></div>
+  <!-- Portrait: art stacked above info. Landscape/desktop: side-by-side columns. -->
+  <div id="np-body" class="flex-1 flex flex-col lg:flex-row landscape:flex-row gap-6 lg:gap-12 landscape:gap-8 overflow-hidden min-h-0">
+    <div id="np-art-col" class="flex flex-col justify-center flex-shrink-0 lg:w-[360px] landscape:w-2/5 landscape:max-w-[280px] mx-auto lg:mx-0 landscape:mx-0 w-full max-w-[420px]">
+      <div class="aspect-square w-full rounded-2xl overflow-hidden adaptive-glow bg-gradient-to-br from-accentRed/40 to-purple-700/40 flex items-center justify-center flex-shrink-0 relative">
+        <img id="np-art" crossorigin="anonymous" class="w-full h-full object-cover hidden" />
+        <i id="np-art-fallback" class="fa-solid fa-compact-disc text-white/50 text-6xl spin-slow"></i>
+        <canvas id="np-visualizer-canvas" class="hidden absolute inset-0 w-full h-full"></canvas>
       </div>
     </div>
-    <div class="flex items-center justify-between text-[11px] text-textSecondary font-medium">
-      <span id="np-time-current">0:00</span>
-      <span id="np-time-total">LIVE</span>
-    </div>
-  </section>
 
-  <section class="flex items-center justify-between mb-6 flex-shrink-0">
-    <button id="np-shuffle" class="text-xl transition-colors text-white" aria-label="Enable shuffle"><i class="fa-solid fa-shuffle"></i></button>
-    <button id="np-prev" class="text-white text-3xl" aria-label="Previous"><i class="fa-solid fa-backward-step"></i></button>
-    <button id="np-playpause" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center text-2xl hover:scale-105 transition-transform shadow-xl" aria-label="Play">
-      <i class="fa-solid fa-play ml-1"></i>
-    </button>
-    <button id="np-next" class="text-white text-3xl" aria-label="Next"><i class="fa-solid fa-forward-step"></i></button>
-    <button id="np-repeat" class="text-xl transition-colors text-white" aria-label="Enable repeat"><i class="fa-solid fa-repeat"></i></button>
-  </section>
+    <div id="np-info-col" class="flex-1 flex flex-col justify-center min-h-0 overflow-y-auto no-scrollbar">
+      <div class="flex items-center justify-between gap-4 mb-6 flex-shrink-0">
+        <div class="min-w-0 flex-1 overflow-hidden">
+          <h2 id="np-title" class="text-xl lg:text-3xl font-extrabold truncate">Nothing playing</h2>
+          <p id="np-subtitle" class="text-textSecondary font-medium truncate text-sm lg:text-base">Pick a station, song, or video</p>
+        </div>
+        <button id="np-like-btn" class="text-2xl text-white flex-shrink-0" aria-label="Save"><i class="fa-regular fa-heart"></i></button>
+      </div>
 
-  <section class="flex items-center justify-between mb-4 flex-shrink-0">
-    <div id="np-live-badge" class="hidden items-center gap-2 text-accentRed">
-      <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
-      <span class="text-xs font-bold uppercase tracking-wide">Live Stream</span>
-    </div>
-    <button id="np-queue-btn" class="flex items-center gap-2 text-textSecondary hover:text-white transition-colors ml-auto" aria-label="Open queue">
-      <span class="text-xs font-semibold">Queue</span>
-      <i class="fa-solid fa-list-ul text-sm"></i>
-    </button>
-  </section>
+      <section class="mb-4 flex-shrink-0">
+        <div id="np-progress-track" class="w-full h-1 bg-white/25 rounded-full relative group cursor-pointer mb-2">
+          <div id="np-progress-bar" class="adaptive-bar h-full w-0 rounded-full relative">
+            <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-lg"></div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-textSecondary font-medium">
+          <span id="np-time-current">0:00</span>
+          <span id="np-time-total">LIVE</span>
+        </div>
+      </section>
 
-  <section id="np-lyrics-card" class="hidden rounded-xl p-4 items-center justify-between mb-4 cursor-pointer glass flex-shrink-0">
-    <div class="min-w-0">
-      <p class="text-[10px] font-bold uppercase tracking-widest text-textSecondary mb-1 flex items-center gap-1.5"><i class="fa-solid fa-music text-[9px]"></i>Lyrics</p>
-      <p id="np-lyrics-preview" class="text-sm font-bold truncate">Loading...</p>
+      <section class="flex items-center justify-between mb-6 flex-shrink-0 lg:max-w-[380px]">
+        <button id="np-shuffle" class="text-xl transition-colors text-white" aria-label="Enable shuffle"><i class="fa-solid fa-shuffle"></i></button>
+        <button id="np-prev" class="text-white text-3xl" aria-label="Previous"><i class="fa-solid fa-backward-step"></i></button>
+        <button id="np-playpause" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center text-2xl hover:scale-105 transition-transform shadow-xl" aria-label="Play">
+          <i class="fa-solid fa-play ml-1"></i>
+        </button>
+        <button id="np-next" class="text-white text-3xl" aria-label="Next"><i class="fa-solid fa-forward-step"></i></button>
+        <button id="np-repeat" class="text-xl transition-colors text-white" aria-label="Enable repeat"><i class="fa-solid fa-repeat"></i></button>
+      </section>
+
+      <section class="flex items-center justify-between mb-4 flex-shrink-0">
+        <div id="np-live-badge" class="hidden items-center gap-2 text-accentRed">
+          <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
+          <span class="text-xs font-bold uppercase tracking-wide">Live Stream</span>
+        </div>
+        <button id="np-queue-btn" class="flex items-center gap-2 text-textSecondary hover:text-white transition-colors ml-auto" aria-label="Open queue">
+          <span class="text-xs font-semibold">Queue</span>
+          <i class="fa-solid fa-list-ul text-sm"></i>
+        </button>
+      </section>
+
+      <section id="np-lyrics-card" class="hidden rounded-xl p-4 items-center justify-between mb-4 cursor-pointer glass flex-shrink-0">
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-textSecondary mb-1 flex items-center gap-1.5"><i class="fa-solid fa-music text-[9px]"></i>Lyrics</p>
+          <p id="np-lyrics-preview" class="text-sm font-bold truncate">Loading...</p>
+        </div>
+        <i class="fa-solid fa-chevron-up text-white/60"></i>
+      </section>
     </div>
-    <i class="fa-solid fa-chevron-up text-white/60"></i>
-  </section>
+  </div>
 </div>
 
 <!-- MENU SHEET -->
@@ -1058,6 +1168,128 @@ const audioEl = new Proxy({}, {
   set(_, prop, value) { activeAudio[prop] = value; return true; },
 });
 
+/* =====================================================================
+   VISUALIZER — Web Audio AnalyserNode tapped off each real <audio>
+   element, drawn as animated frequency bars in the Now Playing sheet.
+   A separate analyser is wired to audioA and audioB (each media element
+   can only ever be routed through Web Audio once), and the draw loop
+   simply reads whichever one is currently active — so gapless swaps
+   between them keep working exactly as before.
+
+   Note: this only works for radio/library playback (native <audio>
+   elements). YouTube video plays through a sandboxed iframe the page
+   has no raw audio access to, so there's no visualizer for that. Radio
+   streams also need the station's server to send CORS headers for the
+   frequency data to be readable — playback itself is unaffected either
+   way, but a station without CORS support will show flat/quiet bars.
+   ===================================================================== */
+let audioCtx = null;
+let analyserA = null, analyserB = null;
+let visualizerActive = false;
+let visualizerRAF = null;
+
+function ensureAudioGraph() {
+  if (audioCtx) return true;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return false;
+    audioCtx = new Ctx();
+    const sourceA = audioCtx.createMediaElementSource(audioA);
+    analyserA = audioCtx.createAnalyser();
+    analyserA.fftSize = 128;
+    analyserA.smoothingTimeConstant = 0.75;
+    sourceA.connect(analyserA);
+    analyserA.connect(audioCtx.destination);
+
+    const sourceB = audioCtx.createMediaElementSource(audioB);
+    analyserB = audioCtx.createAnalyser();
+    analyserB.fftSize = 128;
+    analyserB.smoothingTimeConstant = 0.75;
+    sourceB.connect(analyserB);
+    analyserB.connect(audioCtx.destination);
+    return true;
+  } catch (e) {
+    console.warn('Visualizer unavailable:', e);
+    audioCtx = null;
+    return false;
+  }
+}
+function currentAnalyser() { return activeAudio === audioA ? analyserA : analyserB; }
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawVisualizerFrame() {
+  if (!visualizerActive) return;
+  visualizerRAF = requestAnimationFrame(drawVisualizerFrame);
+  const analyser = currentAnalyser();
+  const canvas = $('#np-visualizer-canvas');
+  if (!analyser || !canvas) return;
+  const w = canvas.width = canvas.clientWidth;
+  const h = canvas.height = canvas.clientHeight;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--dom-color').trim() || '#fa243c';
+  const barCount = 32;
+  const step = Math.max(1, Math.floor(data.length / barCount));
+  const barWidth = w / barCount;
+  ctx.fillStyle = color;
+  for (let i = 0; i < barCount; i++) {
+    const value = data[i * step] || 0;
+    const pct = value / 255;
+    const barHeight = Math.max(3, pct * h * 0.92);
+    const x = i * barWidth;
+    const y = h - barHeight;
+    ctx.globalAlpha = 0.45 + pct * 0.55;
+    roundRectPath(ctx, x + barWidth * 0.18, y, barWidth * 0.64, barHeight, barWidth * 0.3);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function setVisualizerVisible(show) {
+  if (show) {
+    $('#np-art').classList.add('hidden');
+    $('#np-art-fallback').classList.add('hidden');
+    $('#np-visualizer-canvas').classList.remove('hidden');
+  } else {
+    $('#np-visualizer-canvas').classList.add('hidden');
+    // art/fallback visibility gets restored by the renderNowPlaying() call right after this
+  }
+}
+function startVisualizer() {
+  visualizerActive = true;
+  setVisualizerVisible(true);
+  $('#np-visualizer-toggle').classList.add('adaptive-text');
+  drawVisualizerFrame();
+}
+function stopVisualizer() {
+  visualizerActive = false;
+  pauseVisualizerLoop();
+  $('#np-visualizer-toggle').classList.remove('adaptive-text');
+  setVisualizerVisible(false);
+  renderNowPlaying(); // restore correct art/fallback visibility for the current track
+}
+function pauseVisualizerLoop() {
+  if (visualizerRAF) { cancelAnimationFrame(visualizerRAF); visualizerRAF = null; }
+}
+function resumeVisualizerLoopIfNeeded() {
+  if (visualizerActive && !visualizerRAF) drawVisualizerFrame();
+}
+$('#np-visualizer-toggle').addEventListener('click', async () => {
+  if (!Player.mode) { toast('Play something first'); return; }
+  if (!ensureAudioGraph()) { toast('Visualizer is not supported in this browser'); return; }
+  if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (e) {} }
+  if (visualizerActive) stopVisualizer(); else startVisualizer();
+});
+
 const Player = {
   mode: null,        // 'radio' | 'library'
   queue: [],
@@ -1448,6 +1680,7 @@ function renderNowPlaying() {
     else { art.classList.add('hidden'); fallback.classList.remove('hidden'); fallback.className = 'fa-solid fa-compact-disc text-white/50 text-6xl spin-slow'; }
     $('#np-like-btn').innerHTML = `<i class="fa-${State.likedTracks.includes(item.id) ? 'solid' : 'regular'} fa-heart"></i>`;
   }
+  if (visualizerActive) setVisualizerVisible(true); // keep the visualizer showing across track changes
   renderQueueSheet();
 }
 
@@ -2427,12 +2660,12 @@ async function runSearch(q) {
    ===================================================================== */
 const overlayEl = $('#overlay');
 function openSheet(id) { $(id).classList.add('open'); overlayEl.classList.add('open'); document.body.style.overflow = 'hidden'; }
-function closeAllSheets() { $$('.bottom-sheet').forEach(s => s.classList.remove('open')); overlayEl.classList.remove('open'); document.body.style.overflow = ''; }
+function closeAllSheets() { $$('.bottom-sheet').forEach(s => s.classList.remove('open')); overlayEl.classList.remove('open'); document.body.style.overflow = ''; pauseVisualizerLoop(); }
 overlayEl.addEventListener('click', closeAllSheets);
 $$('.close-sheet').forEach(btn => btn.addEventListener('click', closeAllSheets));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllSheets(); });
 
-$('#mini-player').addEventListener('click', () => { if (Player.mode) openSheet('#now-playing-sheet'); });
+$('#mini-player').addEventListener('click', () => { if (Player.mode) { openSheet('#now-playing-sheet'); resumeVisualizerLoopIfNeeded(); } });
 $('#np-minimize').addEventListener('click', closeAllSheets);
 $('#np-playpause').addEventListener('click', togglePlayPause);
 $('#mini-playpause').addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
