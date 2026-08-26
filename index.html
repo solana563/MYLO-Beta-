@@ -127,6 +127,199 @@
        relative to the element's own height) to a fade+scale — translateY(100%) no
        longer lands fully off-screen once the sheet is ~88vh instead of 100vh tall,
        which left a sliver of it visible even when closed. */
+    /* Now Playing and Lyrics share the exact same centered-modal sizing */
+    #now-playing-sheet, #lyrics-sheet {
+      max-width: 920px !important;
+      margin: 0 auto !important;
+      top: 6vh; bottom: 6vh; left: 0; right: 0;
+      border-radius: 28px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 40px 48px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open, #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    /* Blur the app content behind these modals on desktop/landscape,
+       since they float as centered cards rather than covering the full screen. */
+    #overlay:has(+ #now-playing-sheet.open),
+    #overlay:has(+ #lyrics-sheet.open) {
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(24px) saturate(130%);
+      -webkit-backdrop-filter: blur(24px) saturate(130%);
+      transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+    }
+  }
+
+  /* Phones rotated to landscape also get the centered-modal treatment for
+     these two full-screen sheets, even under the 900px desktop breakpoint —
+     a full-bleed edge-to-edge sheet doesn't work well in a short, wide viewport. */
+  @media (orientation: landscape) and (max-width: 899px) {
+    #now-playing-sheet, #lyrics-sheet {
+      max-width: 90vw !important;
+      margin: 0 auto !important;
+      top: 4vh; bottom: 4vh; left: 0; right: 0;
+      border-radius: 24px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 24px 28px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open, #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Bottom sheets */
+  .bottom-sheet { transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+  .bottom-sheet.open { transform: translateY(0); }
+  .sheet-overlay { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+  .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .marquee-track { animation: marquee 8s linear infinite; }
+  @keyframes marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(calc(-100% + 200px)); } }
+
+  .spin-slow { animation: spin 8s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .adaptive-btn { background-color: var(--dom-color, #fa243c); transition: background-color 0.8s ease; }
+  .adaptive-text { color: var(--dom-color, #fa243c); transition: color 0.8s ease; }
+  .adaptive-bar { background-color: var(--dom-color, #fa243c); transition: background-color 0.8s ease; }
+  .adaptive-glow { box-shadow: 0 20px 60px -10px var(--dom-color, #fa243c); transition: box-shadow 0.8s ease; }
+
+  #now-playing-sheet {
+    background: linear-gradient(to bottom, var(--dom-color-dark, #4a2c2a) 0%, #0f0f0f 45%, #050505 100%);
+  }
+
+  .toast { position: fixed; left: 50%; bottom: 100px; transform: translate(-50%, 20px); background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .25s ease; z-index: 200; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 37%, rgba(255,255,255,0.04) 63%); background-size: 400% 100%; animation: skeleton 1.4s ease infinite; }
+  @keyframes skeleton { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+  .nav-item.active { color: #fa243c !important; }
+  .nav-item.active span { font-weight: 700; }
+
+  #yt-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
+  #yt-player-wrap iframe { width: 100%; height: 100%; }
+</style>
+</head>
+<body class="antialiased font-sans text-[15px] bg-gradient-mesh min-h-screen">
+
+<div id="app-shell" class="bg-appBg">
+<canvas id="colorCanvas" class="hidden"></canvas>
+
+<!-- ===================== AUTH GATE ===================== -->
+<div id="auth-gate" class="fixed inset-0 z-[300] bg-appBg flex flex-col items-center justify-center px-8 text-center">
+  <div class="w-20 h-20 rounded-3xl bg-accentRed flex items-center justify-center shadow-2xl mb-6">
+    <svg viewBox="222 188 610 610" class="w-12 h-12 text-white" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,1024) scale(0.1,-0.1)"><path d="M4975 7798 c-229 -25 -547 -112 -765 -208 -487 -214 -936 -607 -1208
+-1057 -372 -615 -476 -1366 -286 -2058 64 -232 157 -456 229 -555 122 -167
+365 -221 560 -126 144 71 231 195 255 363 13 92 -3 174 -70 373 -99 295 -131
+490 -125 770 6 313 67 565 199 828 259 516 728 862 1311 968 119 22 416 30
+541 15 463 -55 871 -257 1205 -598 283 -288 462 -639 533 -1047 20 -112 49
+-177 103 -227 59 -54 104 -72 183 -73 125 -1 224 74 262 197 19 64 20 76 8
+161 -86 649 -421 1251 -930 1672 -406 336 -879 538 -1400 599 -137 16 -474 18
+-605 3z"/>
+<path d="M4428 4166 c-96 -26 -168 -95 -231 -221 -56 -113 -70 -162 -75 -271
+-7 -171 46 -299 183 -443 183 -191 468 -334 780 -392 153 -29 420 -31 562 -5
+517 93 974 431 1139 841 24 60 28 84 28 170 0 82 -4 110 -23 159 -59 148 -200
+208 -332 140 -37 -18 -103 -74 -204 -174 -195 -192 -283 -250 -450 -303 -328
+-102 -687 -28 -946 194 -38 33 -104 103 -147 157 -111 139 -182 175 -284 148z"/></g></svg>
+  </div>
+  <h1 class="text-3xl font-extrabold tracking-tight mb-2">MYLO</h1>
+  <p class="text-textSecondary text-sm mb-8 max-w-[280px]">Radio, YouTube &amp; your own library, in one place.</p>
+
+  <div id="auth-form" class="w-full max-w-xs space-y-3">
+    <!-- Sign in / Sign up toggle -->
+    <div class="flex glass rounded-xl p-1 mb-1">
+      <button id="auth-mode-signin" class="auth-mode-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white text-black transition-colors">Sign In</button>
+      <button id="auth-mode-signup" class="auth-mode-btn flex-1 py-2 rounded-lg text-xs font-bold text-textSecondary transition-colors">Sign Up</button>
+    </div>
+
+    <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email"
+      class="w-full glass rounded-xl px-4 py-3 text-sm placeholder-textSecondary outline-none focus:border-accentRed border border-transparent" />
+    <div class="relative">
+      <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password"
+        class="w-full glass rounded-xl px-4 py-3 text-sm placeholder-textSecondary outline-none focus:border-accentRed border border-transparent pr-11" />
+      <button id="auth-password-toggle" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-textSecondary text-sm" aria-label="Show password">
+        <i class="fa-solid fa-eye"></i>
+      </button>
+    </div>
+    <button id="auth-submit" class="w-full bg-accentRed hover:bg-accentRedHover transition-colors py-3 rounded-xl font-bold text-sm">
+      <i class="fa-solid fa-right-to-bracket mr-2"></i><span id="auth-submit-label">Sign In</span>
+    </button>
+    <p id="auth-status" class="text-[11px] text-textSecondary min-h-[16px]"></p>
+
+    <div class="flex items-center gap-3 py-1">
+      <div class="h-px flex-1 bg-white/10"></div>
+      <span class="text-[10px] uppercase tracking-widest text-textSecondary">or</span>
+      <div class="h-px flex-1 bg-white/10"></div>
+    </div>
+
+    <button id="auth-send-link" class="w-full glass py-3 rounded-xl font-bold text-sm">
+      <i class="fa-solid fa-envelope mr-2"></i>Email me a magic link instead
+    </button>
+    <button id="auth-guest" class="w-full glass py-3 rounded-xl font-bold text-sm">Continue as Guest</button>
+  </div>
+  <p id="auth-config-warning" class="hidden text-[11px] text-amber-400/90 mt-6 max-w-[280px] leading-relaxed">
+    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Supabase isn't configured yet — add your anon key in <code>CONFIG</code> to enable sign-in. Guest mode works fully with local storage.
+  </p>
+</div>
+
+<!-- ===================== HEADER ===================== -->
+<header class="glass sticky top-0 z-40 px-5 py-4 flex items-center justify-between">
+  <div id="header-title" class="flex items-center gap-2 min-w-0">
+    <svg viewBox="222 188 610 610" class="w-6 h-6 text-accentRed flex-shrink-0" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><g transform="translate(0,1024) scale(0.1,-0.1)"><path d="M4975 7798 c-229 -25 -547 -112 -765 -208 -487 -214 -936 -607 -1208
+-1057 -372 -615 -476 -1366 -286 -2058 64 -232 157 -456 229 -555 122 -167
+365 -221 560 -126 144 71 231 195 255 363 13 92 -3 174 -70 373 -99 295 -131
+490 -125 770 6 313 67 565 199 828 259 516 728 862 1311 968 119 22 416 30
+541 15 463 -55 871 -257 1205 -598 283 -288 462 -639 533 -1047 20 -112 49
+-177 103 -227 59 -54 104 -72 183 -73 125 -1 224 74 262 197 19 64 20 76 8
+161 -86 649 -421 1251 -930 1672 -406 336 -879 538 -1400 599 -137 16 -474 18
+-605 3z"/>
+<path d="M4428 4166 c-96 -26 -168 -95 -231 -221 -56 -113 -70 -162 -75 -271
+-7 -171 46 -299 183 -443 183 -191 468 -334 780 -392 153 -29 420 -31 562 -5
+517 93 974 431 1139 841 24 60 28 84 28 170 0 82 -4 110 -23 159 -59 14    }
+    #mini-player-wrap { order: 2; margin-top: auto; padding: 0; }
+    .nav-item {
+      flex-direction: row !important;
+      justify-content: flex-start !important;
+      align-items: center !important;
+      gap: 14px !important;
+      padding: 11px 14px !important;
+      border-radius: 12px;
+      flex: none !important;
+    }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.06); }
+    .nav-item span { font-size: 13px; }
+
+    header, #app-scroll > .view { max-width: 1120px; margin-left: auto; margin-right: auto; }
+    header { padding-left: 2rem !important; padding-right: 2rem !important; }
+
+    /* Now Playing becomes a real centered modal instead of a stretched mobile sheet.
+       It also switches from the mobile "slide up" animation (translateY, which is
+       relative to the element's own height) to a fade+scale — translateY(100%) no
+       longer lands fully off-screen once the sheet is ~88vh instead of 100vh tall,
+       which left a sliver of it visible even when closed. */
     #now-playing-sheet {
       max-width: 920px !important;
       margin: 0 auto !important;
