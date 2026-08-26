@@ -156,6 +156,54 @@
       -webkit-backdrop-filter: blur(24px) saturate(130%);
       transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
     }
+
+    /* Lyrics gets the same centered-modal treatment as Now Playing */
+    #lyrics-sheet {
+      max-width: 640px !important;
+      margin: 0 auto !important;
+      top: 6vh; bottom: 6vh; left: 0; right: 0;
+      border-radius: 28px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 40px 48px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+
+  /* Phones rotated to landscape also get the centered-modal treatment for
+     these two full-screen sheets, even under the 900px desktop breakpoint —
+     a full-bleed edge-to-edge sheet doesn't work well in a short, wide viewport. */
+  @media (orientation: landscape) and (max-width: 899px) {
+    #now-playing-sheet, #lyrics-sheet {
+      max-width: 90vw !important;
+      margin: 0 auto !important;
+      top: 4vh; bottom: 4vh; left: 0; right: 0;
+      border-radius: 24px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 24px 28px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open, #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
   }
 
   .view { display: none; }
@@ -398,9 +446,12 @@
         <i class="fa-brands fa-youtube text-5xl text-red-600/60"></i>
         <p class="text-xs">Pick a video below to start watching</p>
       </div>
-      <div id="yt-now-info" class="px-5 py-2 hidden">
-        <h2 id="yt-now-title" class="text-lg font-bold leading-tight mb-1"></h2>
-        <p id="yt-now-channel" class="text-textSecondary text-xs"></p>
+      <div id="yt-now-info" class="px-5 py-2 hidden flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <h2 id="yt-now-title" class="text-lg font-bold leading-tight mb-1"></h2>
+          <p id="yt-now-channel" class="text-textSecondary text-xs"></p>
+        </div>
+        <button id="yt-now-add-playlist" class="w-9 h-9 rounded-full glass flex items-center justify-center flex-shrink-0" aria-label="Add to playlist"><i class="fa-solid fa-plus text-sm"></i></button>
       </div>
     </section>
 
@@ -476,6 +527,7 @@
     <section>
       <div class="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 mb-8" id="library-tabs">
         <button data-tab="songs" class="lib-tab px-6 py-2 bg-white text-black rounded-full text-sm font-bold shadow-lg flex-shrink-0">All Songs</button>
+        <button data-tab="playlists" class="lib-tab px-6 py-2 glass rounded-full text-sm font-medium text-textSecondary flex-shrink-0">Playlists</button>
         <button data-tab="artists" class="lib-tab px-6 py-2 glass rounded-full text-sm font-medium text-textSecondary flex-shrink-0">Artists</button>
         <button data-tab="albums" class="lib-tab px-6 py-2 glass rounded-full text-sm font-medium text-textSecondary flex-shrink-0">Albums</button>
         <button data-tab="liked" class="lib-tab px-6 py-2 glass rounded-full text-sm font-medium text-textSecondary flex-shrink-0">Liked</button>
@@ -504,6 +556,35 @@
 
       <div id="lib-liked-panel" class="lib-panel hidden space-y-3"></div>
       <div id="lib-stations-panel" class="lib-panel hidden space-y-3"></div>
+
+      <!-- Playlists: user-created, can mix local library tracks + YouTube videos -->
+      <div id="lib-playlists-panel" class="lib-panel hidden space-y-4">
+        <button id="playlist-create-btn" class="w-full glass-card rounded-2xl p-5 flex items-center gap-4 hover:bg-white/[0.06] transition-colors">
+          <div class="w-12 h-12 rounded-xl bg-accentRed flex items-center justify-center text-xl flex-shrink-0"><i class="fa-solid fa-plus"></i></div>
+          <div class="text-left">
+            <h3 class="font-bold text-sm">Create a new playlist</h3>
+            <p class="text-textSecondary text-xs">Mix your local songs and YouTube videos together</p>
+          </div>
+        </button>
+        <div id="lib-playlists-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
+      </div>
+
+      <!-- Playlist detail: view/play/reorder-free list of a single playlist's items -->
+      <div id="lib-playlist-detail-panel" class="lib-panel hidden space-y-4">
+        <button id="playlist-detail-back" class="flex items-center gap-2 text-sm font-semibold text-textSecondary">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <div class="flex items-center gap-4">
+          <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-accentRed/60 to-purple-700/60 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-music text-2xl text-white"></i></div>
+          <div class="min-w-0 flex-1">
+            <h2 id="playlist-detail-title" class="text-lg font-bold truncate">—</h2>
+            <p id="playlist-detail-count" class="text-textSecondary text-xs">0 items</p>
+          </div>
+          <button id="playlist-detail-rename" class="w-9 h-9 rounded-full glass flex items-center justify-center flex-shrink-0" aria-label="Rename playlist"><i class="fa-solid fa-pen text-xs"></i></button>
+          <button id="playlist-detail-delete" class="w-9 h-9 rounded-full glass flex items-center justify-center flex-shrink-0 text-red-400" aria-label="Delete playlist"><i class="fa-solid fa-trash text-xs"></i></button>
+        </div>
+        <div id="playlist-detail-list" class="space-y-3"></div>
+      </div>
 
       <!-- Artists: grid of artist cards -->
       <div id="lib-artists-panel" class="lib-panel hidden">
@@ -561,6 +642,7 @@
         </div>
       </div>
       <div class="flex items-center gap-4 lg:gap-6 lg:justify-center flex-shrink-0">
+        <span id="mini-prev" class="text-white text-lg w-6 text-center"><i class="fa-solid fa-backward-step"></i></span>
         <span id="mini-playpause" class="text-white text-xl w-6 text-center"><i class="fa-solid fa-play"></i></span>
         <span id="mini-next" class="text-white text-xl w-6 text-center"><i class="fa-solid fa-forward-step"></i></span>
       </div>
@@ -686,6 +768,7 @@
   </div>
   <div class="space-y-1">
     <button id="menu-save" class="w-full flex items-center gap-4 py-3 text-left"><i class="fa-solid fa-circle-plus w-5"></i> Save to library</button>
+    <button id="menu-add-playlist" class="hidden w-full flex items-center gap-4 py-3 text-left"><i class="fa-solid fa-list-ul w-5"></i> Add to playlist</button>
     <button id="menu-edit" class="hidden w-full flex items-center gap-4 py-3 text-left"><i class="fa-solid fa-pen w-5"></i> Edit song info</button>
     <button id="menu-sleep" class="w-full flex items-center gap-4 py-3 text-left"><i class="fa-solid fa-moon w-5"></i> Sleep timer</button>
     <button id="menu-remove" class="hidden w-full flex items-center gap-4 py-3 text-left text-red-400"><i class="fa-solid fa-trash w-5"></i> Remove from library</button>
@@ -762,7 +845,7 @@
     <p class="text-[10px] font-bold uppercase tracking-widest text-textSecondary">Lyrics</p>
     <span class="w-10 h-10"></span>
   </header>
-  <div id="lyrics-content" class="flex-1 overflow-y-auto no-scrollbar space-y-5 text-xl font-extrabold leading-snug"></div>
+  <div id="lyrics-content" class="flex-1 overflow-y-auto no-scrollbar space-y-5 text-xl lg:text-2xl font-extrabold leading-snug lg:max-w-2xl lg:mx-auto lg:w-full"></div>
 </div>
 
 <!-- SLEEP TIMER SHEET -->
@@ -776,6 +859,17 @@
   </div>
   <button id="sleep-cancel" class="w-full glass rounded-xl py-3 font-bold text-sm text-red-400">Cancel Timer</button>
   <p id="sleep-status" class="text-center text-xs text-textSecondary mt-3"></p>
+</div>
+
+<!-- ADD TO PLAYLIST SHEET -->
+<div id="add-to-playlist-sheet" class="bottom-sheet fixed left-0 right-0 bottom-0 z-[120] sheet rounded-t-3xl p-6 pb-8 max-h-[80vh] flex flex-col" style="max-width:480px; margin:0 auto;">
+  <div class="w-10 h-1 bg-white/30 rounded-full mx-auto mb-6 flex-shrink-0"></div>
+  <h3 class="text-lg font-bold mb-4 flex-shrink-0">Add to Playlist</h3>
+  <button id="add-to-playlist-new-btn" class="w-full flex items-center gap-4 py-3 text-left flex-shrink-0 border-b border-white/10 mb-2">
+    <div class="w-10 h-10 rounded-xl bg-accentRed flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-plus text-sm"></i></div>
+    <span class="font-bold text-sm">New Playlist</span>
+  </button>
+  <div id="add-to-playlist-list" class="space-y-1 overflow-y-auto no-scrollbar flex-1"></div>
 </div>
 
 <!-- COUNTRY PICKER SHEET (Local Radio) -->
@@ -866,6 +960,56 @@ const State = {
 function persistLikes() { lsSet('mylo:likedTracks', State.likedTracks); }
 function persistStations() { lsSet('mylo:savedStations', State.savedStations); lsSet('mylo:recentStations', State.recentStations); }
 function persistLocalCountry() { lsSet('mylo:localCountry', State.localCountry); }
+
+/* =====================================================================
+   PLAYLISTS — user-created, can mix local library tracks and YouTube
+   videos. Stored in localStorage: playlists hold references, not
+   copies, so a library track just points back at its LibraryDB id and
+   a YouTube item keeps a small snapshot of what it needs to play
+   (id, title, channel, thumb) since there's no local YouTube database.
+   ===================================================================== */
+const PlaylistStore = {
+  getAll() { return lsGet('mylo:playlists', []); },
+  save(playlists) { lsSet('mylo:playlists', playlists); },
+  get(id) { return this.getAll().find(p => p.id === id) || null; },
+  create(name) {
+    const playlists = this.getAll();
+    const pl = { id: uid(), name: (name || '').trim() || 'New Playlist', createdAt: Date.now(), items: [] };
+    playlists.unshift(pl);
+    this.save(playlists);
+    return pl;
+  },
+  rename(id, name) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === id);
+    if (!pl) return;
+    pl.name = (name || '').trim() || pl.name;
+    this.save(playlists);
+  },
+  remove(id) {
+    this.save(this.getAll().filter(p => p.id !== id));
+  },
+  hasItem(playlist, item) {
+    return playlist.items.some(it => it.type === item.type &&
+      (item.type === 'library' ? it.trackId === item.trackId : it.video.id === item.video.id));
+  },
+  addItem(playlistId, item) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === playlistId);
+    if (!pl) return false;
+    if (this.hasItem(pl, item)) return false;
+    pl.items.push(item);
+    this.save(playlists);
+    return true;
+  },
+  removeItemAt(playlistId, index) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === playlistId);
+    if (!pl) return;
+    pl.items.splice(index, 1);
+    this.save(playlists);
+  },
+};
 
 function pushRecentStation(station) {
   State.recentStations = [station, ...State.recentStations.filter(s => s.stationuuid !== station.stationuuid)].slice(0, 10);
@@ -975,17 +1119,38 @@ function readTagsFromFile(file) {
     });
   });
 }
-function pictureToDataUrl(picture) {
-  try {
-    if (!picture || !picture.data) return null;
-    let binary = '';
-    const bytes = new Uint8Array(picture.data);
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return `data:${picture.format || 'image/jpeg'};base64,${btoa(binary)}`;
-  } catch (e) { return null; }
+/* Downscales embedded album art (which can be several MB straight off an MP3/FLAC)
+   down to a small JPEG before it's ever turned into a base64 string. This is the
+   single biggest win for large libraries: without it, a few hundred tracks with
+   full-resolution embedded covers can balloon into hundreds of MB of base64 text
+   sitting in IndexedDB and in memory every time the library loads. */
+function downscaleImageBytes(bytes, mimeType, maxDim = 400, quality = 0.82) {
+  return new Promise((resolve) => {
+    try {
+      const blob = new Blob([bytes], { type: mimeType || 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      const timeout = setTimeout(() => { URL.revokeObjectURL(url); resolve(null); }, 5000);
+      img.onload = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch (e) { resolve(null); }
+  });
 }
 function readDurationFromFile(file) {
   return new Promise((resolve) => {
@@ -1020,8 +1185,10 @@ async function enrichTrackMetadata(rec, file) {
     if (tags.album) rec.album = tags.album;
     if (tags.genre) rec.genre = tags.genre;
     if (tags.year) rec.year = String(tags.year);
-    const dataUrl = pictureToDataUrl(tags.picture);
-    if (dataUrl) rec.artDataUrl = dataUrl;
+    if (tags.picture && tags.picture.data) {
+      const dataUrl = await downscaleImageBytes(new Uint8Array(tags.picture.data), tags.picture.format);
+      if (dataUrl) rec.artDataUrl = dataUrl;
+    }
   }
   rec.duration = await readDurationFromFile(file);
   if (!rec.artDataUrl) {
@@ -1854,7 +2021,9 @@ function videoListItem(v, listContext) {
   return row;
 }
 
+let currentVideo = null; // tracks the currently playing YouTube video, for "Add to Playlist"
 async function playVideo(video, listContext) {
+  currentVideo = video;
   // pause audio player when switching to video
   audioEl.pause();
   switchView('video');
@@ -2297,19 +2466,64 @@ function renderRadioRecent() {
 /* =====================================================================
    VIEW: LIBRARY
    ===================================================================== */
-async function loadLibraryView() {
-  await refreshLibraryCache();
-  renderLibrarySongs();
-  renderLibraryLiked();
-  renderLibraryStations();
-  renderLibraryArtists();
-  renderLibraryAlbums();
+/* Only the tab actually on screen gets rendered right after a library reload;
+   the rest are marked stale and rendered on-demand the moment their tab is
+   opened. Rendering all six views of a large library at once was the main
+   cause of the freeze/crash — this bounds the work to what's actually visible. */
+const LIBRARY_RENDERERS = {
+  songs: renderLibrarySongs,
+  playlists: renderLibraryPlaylists,
+  artists: renderLibraryArtists,
+  albums: renderLibraryAlbums,
+  liked: renderLibraryLiked,
+  stations: renderLibraryStations,
+};
+let libraryStaleTabs = new Set(Object.keys(LIBRARY_RENDERERS));
+function ensureLibraryTabRendered(tab) {
+  if (!LIBRARY_RENDERERS[tab] || !libraryStaleTabs.has(tab)) return;
+  LIBRARY_RENDERERS[tab]();
+  libraryStaleTabs.delete(tab);
 }
+function showLibraryLoadingSkeleton() {
+  $('#library-songs-list').innerHTML = `
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>`;
+}
+
+async function loadLibraryView() {
+  const activeTab = $('.lib-tab.bg-white')?.dataset.tab || 'songs';
+  if (activeTab === 'songs') showLibraryLoadingSkeleton(); // library reloads can take a moment for big collections — never leave it blank
+  await refreshLibraryCache();
+  libraryStaleTabs = new Set(Object.keys(LIBRARY_RENDERERS)); // fresh data — every tab needs a re-render next time it's opened
+  ensureLibraryTabRendered(activeTab);
+}
+
+const SONGS_PAGE_SIZE = 60;
+let songsRenderedCount = 0;
 function renderLibrarySongs() {
   const list = $('#library-songs-list');
   list.innerHTML = '';
+  songsRenderedCount = 0;
   if (!libraryCache.length) { list.appendChild(el('div', '', emptyStateHtml('x', 'fa-music', 'No songs yet', 'Add audio files from this device to build your library.'))); return; }
-  libraryCache.forEach(track => list.appendChild(libraryTrackRow(track, libraryCache)));
+  renderMoreSongs();
+}
+function renderMoreSongs() {
+  const list = $('#library-songs-list');
+  document.getElementById('library-songs-load-more')?.remove();
+  const nextBatch = libraryCache.slice(songsRenderedCount, songsRenderedCount + SONGS_PAGE_SIZE);
+  const frag = document.createDocumentFragment();
+  nextBatch.forEach(track => frag.appendChild(libraryTrackRow(track, libraryCache)));
+  list.appendChild(frag);
+  songsRenderedCount += nextBatch.length;
+  const remaining = libraryCache.length - songsRenderedCount;
+  if (remaining > 0) {
+    const btn = el('button', 'w-full glass-card rounded-2xl py-3 text-sm font-bold text-textSecondary hover:text-white transition-colors', `Show ${Math.min(SONGS_PAGE_SIZE, remaining)} more (${remaining} left)`);
+    btn.id = 'library-songs-load-more';
+    btn.addEventListener('click', renderMoreSongs);
+    list.appendChild(btn);
+  }
 }
 function trackArtSrc(track) { return track.artDataUrl || track.artUrl || null; }
 function libraryTrackRow(track, listContext) {
@@ -2324,11 +2538,13 @@ function libraryTrackRow(track, listContext) {
       <h3 class="font-bold text-sm truncate">${escapeHtml(track.name)}</h3>
       <p class="text-textSecondary text-xs truncate">${escapeHtml(track.artist || 'Unknown Artist')}${track.album ? ' · ' + escapeHtml(track.album) : ''}</p>
     </div>
-    <span class="text-textSecondary text-[11px] flex-shrink-0 tabular-nums">${track.duration ? fmtTime(track.duration) : ''}</span>
+    <span class="text-textSecondary text-[11px] flex-shrink-0 tabular-nums hidden lg:inline">${track.duration ? fmtTime(track.duration) : ''}</span>
+    <button class="track-add-playlist text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Add to playlist"><i class="fa-solid fa-list-ul"></i></button>
     <button class="track-edit text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Edit info"><i class="fa-solid fa-pen"></i></button>
     <button class="track-like text-lg flex-shrink-0"><i class="fa-${State.likedTracks.includes(track.id) ? 'solid' : 'regular'} fa-heart"></i></button>
     <button class="track-remove text-textSecondary text-sm flex-shrink-0 px-1"><i class="fa-solid fa-trash"></i></button>`;
   row.querySelector('.track-play').addEventListener('click', () => playLibraryTrack(track.id, listContext));
+  row.querySelector('.track-add-playlist').addEventListener('click', (e) => { e.stopPropagation(); openAddToPlaylistSheet({ type: 'library', trackId: track.id }); });
   row.querySelector('.track-edit').addEventListener('click', (e) => { e.stopPropagation(); openEditTrackSheet(track); });
   row.querySelector('.track-like').addEventListener('click', (e) => {
     if (State.likedTracks.includes(track.id)) State.likedTracks = State.likedTracks.filter(id => id !== track.id);
@@ -2379,12 +2595,34 @@ function groupBy(list, keyFn, fallback) {
   });
   return map;
 }
+/* Shared pagination helper for the Artists/Albums card grids — same idea as the
+   songs list: never build more DOM at once than a page's worth. */
+function renderPaginatedGrid(gridEl, items, cardBuilder, pageSize = 40) {
+  gridEl.innerHTML = '';
+  let rendered = 0;
+  function renderBatch() {
+    document.getElementById(gridEl.id + '-load-more')?.remove();
+    const batch = items.slice(rendered, rendered + pageSize);
+    const frag = document.createDocumentFragment();
+    batch.forEach(item => frag.appendChild(cardBuilder(item)));
+    gridEl.appendChild(frag);
+    rendered += batch.length;
+    const remaining = items.length - rendered;
+    if (remaining > 0) {
+      const btn = el('button', 'col-span-full glass-card rounded-2xl py-3 text-sm font-bold text-textSecondary hover:text-white transition-colors', `Show ${Math.min(pageSize, remaining)} more (${remaining} left)`);
+      btn.id = gridEl.id + '-load-more';
+      btn.addEventListener('click', renderBatch);
+      gridEl.appendChild(btn);
+    }
+  }
+  renderBatch();
+}
 function renderLibraryArtists() {
   const grid = $('#lib-artists-grid');
-  grid.innerHTML = '';
   if (!libraryCache.length) { grid.innerHTML = ''; grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('x', 'fa-user', 'No artists yet', 'Add songs to see them grouped by artist.'))); return; }
   const groups = groupBy(libraryCache, t => t.artist, 'Unknown Artist');
-  [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([artist, tracks]) => {
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  renderPaginatedGrid(grid, sorted, ([artist, tracks]) => {
     const art = trackArtSrc(tracks.find(t => trackArtSrc(t)) || {});
     const card = el('button', 'glass-card p-3 rounded-2xl text-left');
     card.innerHTML = `
@@ -2394,15 +2632,15 @@ function renderLibraryArtists() {
       <h3 class="font-bold text-sm truncate text-center">${escapeHtml(artist)}</h3>
       <p class="text-textSecondary text-[11px] truncate text-center">${tracks.length} song${tracks.length !== 1 ? 's' : ''}</p>`;
     card.addEventListener('click', () => showLibraryDetail(artist, tracks, 'fa-user'));
-    grid.appendChild(card);
+    return card;
   });
 }
 function renderLibraryAlbums() {
   const grid = $('#lib-albums-grid');
-  grid.innerHTML = '';
   if (!libraryCache.length) { grid.innerHTML = ''; grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('x', 'fa-record-vinyl', 'No albums yet', 'Add songs to see them grouped by album.'))); return; }
   const groups = groupBy(libraryCache, t => t.album, 'Unknown Album');
-  [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([album, tracks]) => {
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  renderPaginatedGrid(grid, sorted, ([album, tracks]) => {
     const art = trackArtSrc(tracks.find(t => trackArtSrc(t)) || {});
     const card = el('button', 'glass-card p-3 rounded-2xl text-left');
     card.innerHTML = `
@@ -2412,7 +2650,7 @@ function renderLibraryAlbums() {
       <h3 class="font-bold text-sm truncate">${escapeHtml(album)}</h3>
       <p class="text-textSecondary text-[11px] truncate">${escapeHtml(tracks[0].artist || 'Unknown Artist')} · ${tracks.length} song${tracks.length !== 1 ? 's' : ''}</p>`;
     card.addEventListener('click', () => showLibraryDetail(album, tracks, 'fa-record-vinyl'));
-    grid.appendChild(card);
+    return card;
   });
 }
 function showLibraryDetail(title, tracks, icon) {
@@ -2437,6 +2675,192 @@ $('#lib-detail-back').addEventListener('click', () => {
   $(`#lib-${activeTab}-panel`).classList.remove('hidden');
 });
 
+/* ---- Playlists (mix of local library tracks + YouTube videos) ---- */
+function renderLibraryPlaylists() {
+  const grid = $('#lib-playlists-grid');
+  grid.innerHTML = '';
+  document.getElementById('lib-playlists-empty')?.remove();
+  const playlists = PlaylistStore.getAll();
+  if (!playlists.length) {
+    grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('lib-playlists-empty', 'fa-list-ul', 'No playlists yet', 'Create one above to start mixing songs and videos.')));
+    return;
+  }
+  playlists.forEach(pl => {
+    let art = null;
+    for (const it of pl.items) {
+      if (it.type === 'library') { const t = libraryCache.find(x => x.id === it.trackId); if (t && trackArtSrc(t)) { art = trackArtSrc(t); break; } }
+      else if (it.type === 'youtube' && it.video.thumb) { art = it.video.thumb; break; }
+    }
+    const card = el('button', 'glass-card p-3 rounded-2xl text-left');
+    card.innerHTML = `
+      <div class="aspect-square rounded-xl overflow-hidden mb-3 bg-gradient-to-br from-accentRed/40 to-purple-700/40 flex items-center justify-center">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.remove()" />` : `<i class="fa-solid fa-list-ul text-2xl text-white/70"></i>`}
+      </div>
+      <h3 class="font-bold text-sm truncate">${escapeHtml(pl.name)}</h3>
+      <p class="text-textSecondary text-[11px] truncate">${pl.items.length} item${pl.items.length !== 1 ? 's' : ''}</p>`;
+    card.addEventListener('click', () => showPlaylistDetail(pl));
+    grid.appendChild(card);
+  });
+}
+
+function playlistLibraryRow(track, queueTracks, playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+  const art = trackArtSrc(track);
+  row.innerHTML = `
+    <button class="pl-item-play w-12 h-12 rounded-xl bg-gradient-to-br from-accentRed/60 to-purple-700/60 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+      ${art ? `<img src="${art}" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : ''}
+      <i class="fa-solid fa-play text-white relative z-10"></i>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h3 class="font-bold text-sm truncate">${escapeHtml(track.name)}</h3>
+      <p class="text-textSecondary text-xs truncate">${escapeHtml(track.artist || 'Unknown Artist')}</p>
+    </div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-play').addEventListener('click', () => playLibraryTrack(track.id, queueTracks));
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+function playlistVideoRow(video, queueVideos, playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+  row.innerHTML = `
+    <button class="pl-item-play w-20 h-14 rounded-lg overflow-hidden flex-shrink-0 relative">
+      <img class="w-full h-full object-cover" src="${video.thumb}" alt="" />
+      <div class="absolute inset-0 bg-black/20 flex items-center justify-center"><i class="fa-solid fa-play text-xs text-white"></i></div>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h4 class="text-sm font-bold truncate">${escapeHtml(video.title)}</h4>
+      <p class="text-[11px] text-textSecondary truncate">${escapeHtml(video.channel)}</p>
+    </div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-play').addEventListener('click', () => playVideo(video, queueVideos));
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+function playlistMissingRow(playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl opacity-60');
+  row.innerHTML = `
+    <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-triangle-exclamation text-white/30"></i></div>
+    <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-textSecondary">Track no longer available</p></div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+
+let currentPlaylistId = null;
+function showPlaylistDetail(playlist) {
+  if (!playlist) return;
+  currentPlaylistId = playlist.id;
+  $('#playlist-detail-title').textContent = playlist.name;
+  $('#playlist-detail-count').textContent = `${playlist.items.length} item${playlist.items.length !== 1 ? 's' : ''}`;
+  const list = $('#playlist-detail-list');
+  list.innerHTML = '';
+  if (!playlist.items.length) {
+    list.appendChild(el('div', '', emptyStateHtml('x', 'fa-list-ul', 'Empty playlist', 'Add songs or YouTube videos to get started.')));
+  } else {
+    const libraryTracks = playlist.items.filter(it => it.type === 'library').map(it => libraryCache.find(t => t.id === it.trackId)).filter(Boolean);
+    const videos = playlist.items.filter(it => it.type === 'youtube').map(it => it.video);
+    playlist.items.forEach((it, idx) => {
+      if (it.type === 'library') {
+        const track = libraryCache.find(t => t.id === it.trackId);
+        list.appendChild(track ? playlistLibraryRow(track, libraryTracks, playlist.id, idx) : playlistMissingRow(playlist.id, idx));
+      } else if (it.type === 'youtube') {
+        list.appendChild(playlistVideoRow(it.video, videos, playlist.id, idx));
+      }
+    });
+  }
+  $$('.lib-panel').forEach(p => p.classList.add('hidden'));
+  $('#lib-playlist-detail-panel').classList.remove('hidden');
+}
+$('#playlist-detail-back').addEventListener('click', () => {
+  $('#lib-playlist-detail-panel').classList.add('hidden');
+  $('#lib-playlists-panel').classList.remove('hidden');
+});
+$('#playlist-detail-rename').addEventListener('click', () => {
+  const pl = PlaylistStore.get(currentPlaylistId);
+  if (!pl) return;
+  const name = prompt('Rename playlist', pl.name);
+  if (name === null) return;
+  PlaylistStore.rename(pl.id, name);
+  showPlaylistDetail(PlaylistStore.get(pl.id));
+  renderLibraryPlaylists();
+});
+$('#playlist-detail-delete').addEventListener('click', () => {
+  const pl = PlaylistStore.get(currentPlaylistId);
+  if (!pl) return;
+  if (!confirm(`Delete "${pl.name}"? This can't be undone.`)) return;
+  PlaylistStore.remove(pl.id);
+  $('#lib-playlist-detail-panel').classList.add('hidden');
+  $('#lib-playlists-panel').classList.remove('hidden');
+  renderLibraryPlaylists();
+  toast('Playlist deleted');
+});
+$('#playlist-create-btn').addEventListener('click', () => {
+  const name = prompt('Name your playlist');
+  if (name === null) return;
+  PlaylistStore.create(name);
+  renderLibraryPlaylists();
+});
+
+/* Add-to-playlist sheet: works for both a library track and a YouTube video */
+let pendingPlaylistItem = null; // { type:'library', trackId } or { type:'youtube', video }
+function openAddToPlaylistSheet(item) {
+  pendingPlaylistItem = item;
+  const list = $('#add-to-playlist-list');
+  const playlists = PlaylistStore.getAll();
+  list.innerHTML = '';
+  if (!playlists.length) {
+    list.innerHTML = `<p class="text-textSecondary text-sm text-center py-8">No playlists yet — create one above.</p>`;
+  } else {
+    playlists.forEach(pl => {
+      const already = PlaylistStore.hasItem(pl, item);
+      const row = el('button', 'w-full flex items-center justify-between py-3 px-1 text-left');
+      row.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-list-ul text-white/50 text-xs"></i></div>
+          <div class="min-w-0"><p class="text-sm font-semibold truncate">${escapeHtml(pl.name)}</p><p class="text-textSecondary text-[11px]">${pl.items.length} item${pl.items.length !== 1 ? 's' : ''}</p></div>
+        </div>
+        ${already ? '<i class="fa-solid fa-check text-accentRed"></i>' : ''}`;
+      row.addEventListener('click', () => {
+        const added = PlaylistStore.addItem(pl.id, item);
+        closeAllSheets();
+        renderLibraryPlaylists();
+        toast(added ? `Added to ${pl.name}` : `Already in ${pl.name}`);
+      });
+      list.appendChild(row);
+    });
+  }
+  closeAllSheets();
+  openSheet('#add-to-playlist-sheet');
+}
+$('#add-to-playlist-new-btn').addEventListener('click', () => {
+  const name = prompt('Name your playlist');
+  if (name === null) return;
+  const pl = PlaylistStore.create(name);
+  if (pendingPlaylistItem) PlaylistStore.addItem(pl.id, pendingPlaylistItem);
+  closeAllSheets();
+  renderLibraryPlaylists();
+  toast(`Added to ${pl.name}`);
+});
+$('#yt-now-add-playlist').addEventListener('click', () => {
+  if (!currentVideo) return;
+  openAddToPlaylistSheet({ type: 'youtube', video: currentVideo });
+});
+
 /* ---- Edit track info ---- */
 let editingTrackId = null;
 let editingTrackArtOverride = null; // data URL if user picked a new image
@@ -2456,16 +2880,15 @@ function openEditTrackSheet(track) {
   openSheet('#edit-track-sheet');
 }
 $('#edit-art-change').addEventListener('click', () => $('#edit-art-input').click());
-$('#edit-art-input').addEventListener('change', (e) => {
+$('#edit-art-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    editingTrackArtOverride = reader.result;
-    const preview = $('#edit-art-preview'), icon = $('#edit-art-icon');
-    preview.src = editingTrackArtOverride; preview.classList.remove('hidden'); icon.classList.add('hidden');
-  };
-  reader.readAsDataURL(file);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const dataUrl = await downscaleImageBytes(bytes, file.type);
+  if (!dataUrl) { toast('Could not use that image'); return; }
+  editingTrackArtOverride = dataUrl;
+  const preview = $('#edit-art-preview'), icon = $('#edit-art-icon');
+  preview.src = editingTrackArtOverride; preview.classList.remove('hidden'); icon.classList.add('hidden');
 });
 $('#edit-fetch-art').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
@@ -2548,6 +2971,7 @@ $$('.lib-tab').forEach(btn => btn.addEventListener('click', () => {
   btn.classList.add('bg-white', 'text-black'); btn.classList.remove('glass', 'text-textSecondary');
   $$('.lib-panel').forEach(p => p.classList.add('hidden'));
   $(`#lib-${btn.dataset.tab}-panel`).classList.remove('hidden');
+  ensureLibraryTabRendered(btn.dataset.tab);
 }));
 
 /* Library file upload */
@@ -2669,11 +3093,20 @@ $('#mini-player').addEventListener('click', () => { if (Player.mode) { openSheet
 $('#np-minimize').addEventListener('click', closeAllSheets);
 $('#np-playpause').addEventListener('click', togglePlayPause);
 $('#mini-playpause').addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
+$('#mini-prev').addEventListener('click', (e) => { e.stopPropagation(); playPrev(); });
 $('#mini-next').addEventListener('click', (e) => { e.stopPropagation(); playNext(false); });
 $('#np-next').addEventListener('click', () => playNext(false));
 $('#np-prev').addEventListener('click', playPrev);
-$('#np-shuffle').addEventListener('click', () => { Player.shuffle = !Player.shuffle; $('#np-shuffle').classList.toggle('adaptive-text', Player.shuffle); });
-$('#np-repeat').addEventListener('click', () => { Player.repeat = !Player.repeat; $('#np-repeat').classList.toggle('adaptive-text', Player.repeat); });
+$('#np-shuffle').addEventListener('click', () => {
+  Player.shuffle = !Player.shuffle;
+  $('#np-shuffle').classList.toggle('adaptive-text', Player.shuffle);
+  preloadStandby(); // re-prime the gapless preload so the next auto-advance respects the new setting
+});
+$('#np-repeat').addEventListener('click', () => {
+  Player.repeat = !Player.repeat;
+  $('#np-repeat').classList.toggle('adaptive-text', Player.repeat);
+  preloadStandby();
+});
 $('#np-queue-btn').addEventListener('click', () => openSheet('#queue-sheet'));
 $('#np-menu-btn').addEventListener('click', () => { populateMenuSheet(); openSheet('#menu-sheet'); });
 $('#np-lyrics-card').addEventListener('click', () => { openSheet('#lyrics-sheet'); Lyrics.activeIndex = -1; updateSyncedLyricsHighlight(); });
@@ -2703,8 +3136,10 @@ function populateMenuSheet() {
   $('#menu-subtitle').textContent = Player.mode === 'radio' ? (item.tags || 'Radio') : (item.artist || 'Unknown Artist');
   $('#menu-remove').classList.toggle('hidden', Player.mode !== 'library');
   $('#menu-edit').classList.toggle('hidden', Player.mode !== 'library');
+  $('#menu-add-playlist').classList.toggle('hidden', Player.mode !== 'library');
   $('#menu-save').onclick = () => { if (Player.mode === 'radio') toggleSavedStation(item); else { if (!State.likedTracks.includes(item.id)) { State.likedTracks.push(item.id); persistLikes(); } } closeAllSheets(); toast('Saved to Library'); };
   $('#menu-edit').onclick = () => { if (Player.mode === 'library') openEditTrackSheet(item); };
+  $('#menu-add-playlist').onclick = () => { if (Player.mode === 'library') openAddToPlaylistSheet({ type: 'library', trackId: item.id }); };
   $('#menu-remove').onclick = async () => { await LibraryDB.remove(item.id); closeAllSheets(); toast('Removed'); await loadLibraryView(); };
   $('#menu-share').onclick = () => { navigator.clipboard?.writeText(item.url_resolved || item.url || item.name).then(() => toast('Copied')); };
   $('#menu-sleep').onclick = () => { closeAllSheets(); updateSleepStatus(); openSheet('#sleep-sheet'); };
