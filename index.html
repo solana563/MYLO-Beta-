@@ -268,6 +268,18 @@
   <p class="text-textSecondary text-sm mb-8 max-w-[280px]">Radio, YouTube &amp; your own library, in one place.</p>
 
   <div id="auth-form" class="w-full max-w-xs space-y-3">
+    <button id="auth-google" class="w-full bg-white text-black py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-gray-100 transition-colors">
+      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.71a5.4 5.4 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>
+      Continue with Google
+    </button>
+    <p id="auth-google-status" class="text-[11px] text-textSecondary min-h-[16px] text-center"></p>
+
+    <div class="flex items-center gap-3 py-1">
+      <div class="h-px flex-1 bg-white/10"></div>
+      <span class="text-[10px] uppercase tracking-widest text-textSecondary">or</span>
+      <div class="h-px flex-1 bg-white/10"></div>
+    </div>
+
     <!-- Sign in / Sign up toggle -->
     <div class="flex glass rounded-xl p-1 mb-1">
       <button id="auth-mode-signin" class="auth-mode-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white text-black transition-colors">Sign In</button>
@@ -3181,6 +3193,17 @@ function enterApp() {
   switchView(VIEW_META[requestedView] ? requestedView : 'explore');
 }
 
+/* Detects whether this copy of the app is running inside the Capacitor native
+   shell (see the mylo-capacitor project) vs. a plain browser tab. Safe to call
+   even when Capacitor isn't present at all — always false on the web. */
+function isCapacitorNative() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+const NATIVE_AUTH_REDIRECT = 'mylo://auth-callback'; // must match the custom URL scheme registered in the native Android/iOS projects
+function getAuthRedirectUrl() {
+  return isCapacitorNative() ? NATIVE_AUTH_REDIRECT : window.location.href;
+}
+
 async function initAuth() {
   if (!supabaseClient) {
     $('#auth-config-warning').classList.remove('hidden');
@@ -3238,7 +3261,7 @@ $('#auth-submit').addEventListener('click', async () => {
   setAuthStatus(authMode === 'signup' ? 'Creating your account...' : 'Signing in...', 'default');
   try {
     if (authMode === 'signup') {
-      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo: window.location.href } });
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo: getAuthRedirectUrl() } });
       if (error) throw error;
       if (data.session) { setAuthStatus('Account created!', 'ok'); }
       else { setAuthStatus('Account created — check your inbox to confirm your email, then sign in.', 'ok'); setAuthMode('signin'); }
@@ -3259,7 +3282,7 @@ $('#auth-send-link').addEventListener('click', async () => {
   if (!supabaseClient) { setAuthStatus('Supabase is not configured — use Guest mode below.', 'warn'); return; }
   setAuthStatus('Sending link...', 'default');
   try {
-    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: getAuthRedirectUrl() } });
     if (error) throw error;
     setAuthStatus('Check your inbox for a sign-in link.', 'ok');
   } catch (e) {
@@ -3267,6 +3290,46 @@ $('#auth-send-link').addEventListener('click', async () => {
   }
 });
 $('#auth-guest').addEventListener('click', () => { lsSet('mylo:guest', true); enterApp(); });
+
+/* Google sign-in (Supabase OAuth, "Option A" — browser-redirect flow).
+   On the web this just navigates to Google and back; on the web this is all
+   that's needed since the redirect lands back on this same page and
+   initAuth()'s onAuthStateChange listener picks up the session automatically.
+   Inside the Capacitor native shell, a plain redirect would navigate the
+   app's own WebView away to Google's page with no way back — so instead we
+   open Google's page in the system browser (via the Browser plugin) and wait
+   for it to hand control back through the custom mylo://auth-callback deep
+   link, completed in initCapacitorBridge()'s appUrlOpen listener. */
+$('#auth-google').addEventListener('click', async () => {
+  const statusEl = $('#auth-google-status');
+  const setGoogleStatus = (msg, tone) => {
+    statusEl.textContent = msg;
+    statusEl.className = `text-[11px] min-h-[16px] text-center ${tone === 'error' ? 'text-red-400' : 'text-textSecondary'}`;
+  };
+  if (!supabaseClient) { setGoogleStatus('Supabase is not configured — use Guest mode below.'); return; }
+  setGoogleStatus('Opening Google sign-in...');
+  try {
+    if (isCapacitorNative()) {
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      const Browser = window.Capacitor.Plugins.Browser;
+      if (Browser) await Browser.open({ url: data.url });
+      else window.open(data.url, '_blank'); // Browser plugin not installed — best-effort fallback
+    } else {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: getAuthRedirectUrl() },
+      });
+      if (error) throw error;
+      // Browser navigates away here; nothing further to do on this page load.
+    }
+  } catch (e) {
+    setGoogleStatus(e.message || 'Could not start Google sign-in.', 'error');
+  }
+});
 
 function updateAccountSheet() {
   if (currentUser) {
