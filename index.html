@@ -1634,9 +1634,73 @@ function handleEnded(sourceEl) {
   }
 }
 
+/* =====================================================================
+   MEDIA SESSION — lock-screen, notification-shade, and Bluetooth/headset
+   playback controls, plus the track title/artist/art shown there. Only
+   covers radio + library playback (our own dual <audio> elements) — a
+   YouTube video plays inside a sandboxed iframe outside our control, so
+   metadata is explicitly cleared when switching to video rather than
+   leaving stale "now playing" info for audio that's actually paused.
+   ===================================================================== */
+function setupMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  try { navigator.mediaSession.setActionHandler('play', () => audioEl.play().catch(() => {})); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('pause', () => audioEl.pause()); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('previoustrack', () => playPrev()); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false)); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('stop', () => audioEl.pause()); } catch (e) {}
+  try {
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (Player.mode !== 'library' || !isFinite(audioEl.duration)) return; // radio is live — nothing to seek
+      if (details.fastSeek && 'fastSeek' in audioEl) { audioEl.fastSeek(details.seekTime); return; }
+      audioEl.currentTime = details.seekTime;
+    });
+  } catch (e) { /* seekto isn't supported on every platform — fine to skip */ }
+}
+function updateMediaSessionMetadata() {
+  if (!('mediaSession' in navigator)) return;
+  const item = currentItem();
+  if (!item || (Player.mode !== 'radio' && Player.mode !== 'library')) {
+    navigator.mediaSession.metadata = null;
+    return;
+  }
+  let title, artist, album, art;
+  if (Player.mode === 'radio') {
+    title = item.name || 'Radio';
+    artist = (item.tags || 'Live radio').split(',')[0];
+    album = item.country || 'MYLO Radio';
+    art = item.favicon;
+  } else {
+    title = item.name || 'Untitled';
+    artist = item.artist || 'Unknown Artist';
+    album = item.album || 'MYLO Library';
+    art = trackArtSrc(item);
+  }
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title, artist, album,
+      artwork: art ? [{ src: art, sizes: '512x512', type: 'image/png' }] : [],
+    });
+  } catch (e) {}
+}
+function updateMediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
+  try {
+    if (Player.mode !== 'library' || !isFinite(audioEl.duration) || audioEl.duration <= 0) {
+      navigator.mediaSession.setPositionState(); // live stream / unknown duration — no scrubber
+      return;
+    }
+    navigator.mediaSession.setPositionState({
+      duration: audioEl.duration,
+      playbackRate: audioEl.playbackRate || 1,
+      position: Math.min(audioEl.currentTime, audioEl.duration),
+    });
+  } catch (e) {}
+}
+
 function bindPlayerEvents(el) {
-  el.addEventListener('play', () => { if (el === activeAudio) updatePlayIcons(true); });
-  el.addEventListener('pause', () => { if (el === activeAudio) updatePlayIcons(false); });
+  el.addEventListener('play', () => { if (el === activeAudio) { updatePlayIcons(true); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; } });
+  el.addEventListener('pause', () => { if (el === activeAudio) { updatePlayIcons(false); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; } });
   el.addEventListener('ended', () => handleEnded(el));
   el.addEventListener('timeupdate', () => {
     if (el !== activeAudio || Player.mode !== 'library') return;
@@ -1645,6 +1709,7 @@ function bindPlayerEvents(el) {
     $('#np-time-current').textContent = fmtTime(el.currentTime);
     $('#np-time-total').textContent = fmtTime(el.duration);
     updateSyncedLyricsHighlight();
+    updateMediaSessionPosition();
   });
 }
 bindPlayerEvents(audioA);
@@ -1840,6 +1905,8 @@ function renderNowPlaying() {
   const item = currentItem();
   if (!item) return;
   resetDominantColor();
+  updateMediaSessionMetadata();
+  updateMediaSessionPosition();
   const art = $('#np-art'), fallback = $('#np-art-fallback');
   $('#np-shuffle').classList.toggle('adaptive-text', Player.shuffle);
   $('#np-repeat').classList.toggle('adaptive-text', Player.repeat);
@@ -2049,6 +2116,7 @@ async function playVideo(video, listContext) {
   currentVideo = video;
   // pause audio player when switching to video
   audioEl.pause();
+  if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } // YouTube plays in its own iframe — don't leave stale lock-screen controls for paused audio
   switchView('video');
   $('#yt-placeholder').classList.add('hidden');
   $('#yt-player-wrap').classList.remove('hidden');
@@ -3448,6 +3516,7 @@ window.addEventListener('DOMContentLoaded', () => {
   updateAccountSheet();
   setupManifest();
   checkInstallVisibility();
+  setupMediaSession();
 });
 
 /* Registers ./sw.js if it's present alongside this file on whatever server
