@@ -914,6 +914,13 @@
     <button id="account-signin" class="w-full flex items-center gap-4 py-3 text-left"><i class="fa-solid fa-right-to-bracket w-5"></i> Sign in with email</button>
     <button id="account-signout" class="hidden w-full flex items-center gap-4 py-3 text-left text-red-400"><i class="fa-solid fa-right-from-bracket w-5"></i> Sign out</button>
     <button id="account-install-app" class="w-full flex items-center gap-4 py-3 text-left border-t border-white/10 mt-1 pt-4"><i class="fa-solid fa-download w-5 text-accentRed"></i> <span>Download App<span class="block text-textSecondary text-[11px] font-normal">Install for a home screen icon</span></span></button>
+    <button id="account-crossfade" class="w-full flex items-center justify-between gap-4 py-3 text-left">
+      <span class="flex items-center gap-4">
+        <i class="fa-solid fa-arrow-right-arrow-left w-5"></i>
+        <span>Crossfade<span class="block text-textSecondary text-[11px] font-normal">Fade between local library tracks</span></span>
+      </span>
+      <span id="account-crossfade-value" class="text-textSecondary text-xs font-bold flex-shrink-0">Off</span>
+    </button>
   </div>
   <button class="close-sheet w-full mt-4 py-3 text-textSecondary font-semibold">Close</button>
 </div>
@@ -1374,6 +1381,7 @@ const audioEl = new Proxy({}, {
    ===================================================================== */
 let audioCtx = null;
 let analyserA = null, analyserB = null;
+let gainA = null, gainB = null;
 let visualizerActive = false;
 let visualizerRAF = null;
 
@@ -1384,26 +1392,31 @@ function ensureAudioGraph() {
     if (!Ctx) return false;
     audioCtx = new Ctx();
     const sourceA = audioCtx.createMediaElementSource(audioA);
+    gainA = audioCtx.createGain();
     analyserA = audioCtx.createAnalyser();
     analyserA.fftSize = 128;
     analyserA.smoothingTimeConstant = 0.75;
-    sourceA.connect(analyserA);
+    sourceA.connect(gainA);
+    gainA.connect(analyserA);
     analyserA.connect(audioCtx.destination);
 
     const sourceB = audioCtx.createMediaElementSource(audioB);
+    gainB = audioCtx.createGain();
     analyserB = audioCtx.createAnalyser();
     analyserB.fftSize = 128;
     analyserB.smoothingTimeConstant = 0.75;
-    sourceB.connect(analyserB);
+    sourceB.connect(gainB);
+    gainB.connect(analyserB);
     analyserB.connect(audioCtx.destination);
     return true;
   } catch (e) {
-    console.warn('Visualizer unavailable:', e);
+    console.warn('Web Audio graph unavailable (visualizer/crossfade disabled):', e);
     audioCtx = null;
     return false;
   }
 }
 function currentAnalyser() { return activeAudio === audioA ? analyserA : analyserB; }
+function gainFor(el) { return el === audioA ? gainA : gainB; }
 
 function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -1487,6 +1500,10 @@ const Player = {
   shuffle: false,
   repeat: false,
   sleepTimeout: null,
+  crossfadeEnabled: lsGet('mylo:crossfadeEnabled', false), // off by default — preserves the exact-gapless behavior unless the user opts in
+  crossfadeDuration: lsGet('mylo:crossfadeDuration', 4),   // seconds
+  crossfadeTriggered: false, // guards against re-triggering a fade multiple times for the same track
+  crossfadeTimeoutId: null,
 };
 
 function currentItem() { return Player.index >= 0 ? Player.queue[Player.index] : null; }
@@ -1537,6 +1554,7 @@ function preloadStandby() {
 }
 
 async function playRadioStation(station, listContext) {
+  cancelCrossfade();
   Player.mode = 'radio';
   Player.queue = listContext && listContext.length ? listContext : [station];
   Player.index = Player.queue.findIndex(s => s.stationuuid === station.stationuuid);
@@ -1552,6 +1570,8 @@ async function playRadioStation(station, listContext) {
 }
 
 async function playLibraryTrack(trackId, listContext) {
+  cancelCrossfade();
+  ensureAudioGraph(); // needed for crossfade's gain nodes; harmless no-op if unsupported or already set up
   await refreshLibraryCache();
   Player.mode = 'library';
   Player.queue = listContext && listContext.length ? listContext : libraryCache;
@@ -1596,6 +1616,7 @@ function playPrev() {
    auto-advance path, so it always (re)builds the source directly, then
    re-primes the standby element for the position that follows. */
 async function resumeFromIndex() {
+  cancelCrossfade();
   const item = currentItem();
   if (!item) return;
   if (Player.mode === 'radio') {
@@ -1623,6 +1644,7 @@ function handleEnded(sourceEl) {
     activeAudio = standbyAudio;
     standbyAudio = finished;
     Player.index = Player.pendingNextIndex;
+    Player.crossfadeTriggered = false;
     activeAudio.currentTime = 0;
     activeAudio.play().catch(() => {});
     renderNowPlaying();
@@ -1632,6 +1654,59 @@ function handleEnded(sourceEl) {
   } else if (Player.mode === 'library') {
     playNext(true); // no preload ready (e.g. end of queue) — fall back to a normal advance
   }
+}
+
+/* =====================================================================
+   CROSSFADE — an alternative to the exact-cut gapless swap above, off by
+   default. When enabled, the last few seconds of the outgoing track
+   overlap with the incoming one instead of cutting exactly at the
+   boundary: the already-preloaded standby track starts playing early and
+   its gain ramps 0→1 while the outgoing track's gain ramps 1→0, using the
+   same Web Audio graph built for the visualizer. Only applies to library
+   playback — radio streams don't have a fixed "track ending" to fade
+   around, and playRadioStation()/resumeFromIndex() cancel any in-flight
+   fade if the user jumps away mid-crossfade.
+   ===================================================================== */
+function cancelCrossfade() {
+  if (Player.crossfadeTimeoutId) { clearTimeout(Player.crossfadeTimeoutId); Player.crossfadeTimeoutId = null; }
+  Player.crossfadeTriggered = false;
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    [gainA, gainB].forEach((g) => { if (g) { g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(1, now); } });
+  } catch (e) {}
+}
+function startCrossfade() {
+  if (!ensureAudioGraph()) return; // no Web Audio support here — the normal 'ended'-based gapless swap still covers it
+  const outgoing = activeAudio, incoming = standbyAudio;
+  const outGain = gainFor(outgoing), inGain = gainFor(incoming);
+  if (!outGain || !inGain || !incoming.src || incoming.readyState < 2) return; // standby not actually ready — skip, fall back to the ended-based swap
+  Player.crossfadeTriggered = true;
+  const now = audioCtx.currentTime;
+  const dur = Player.crossfadeDuration;
+  inGain.gain.cancelScheduledValues(now);
+  inGain.gain.setValueAtTime(0, now);
+  inGain.gain.linearRampToValueAtTime(1, now + dur);
+  outGain.gain.cancelScheduledValues(now);
+  outGain.gain.setValueAtTime(outGain.gain.value, now);
+  outGain.gain.linearRampToValueAtTime(0, now + dur);
+  incoming.currentTime = 0;
+  incoming.play().catch(() => {});
+  if (Player.crossfadeTimeoutId) clearTimeout(Player.crossfadeTimeoutId);
+  Player.crossfadeTimeoutId = setTimeout(() => completeCrossfade(outgoing, incoming, outGain), dur * 1000);
+}
+function completeCrossfade(outgoing, incoming, outGain) {
+  Player.crossfadeTimeoutId = null;
+  outgoing.pause();
+  if (audioCtx && outGain) { try { outGain.gain.cancelScheduledValues(audioCtx.currentTime); outGain.gain.setValueAtTime(1, audioCtx.currentTime); } catch (e) {} }
+  activeAudio = incoming;
+  standbyAudio = outgoing;
+  Player.index = Player.pendingNextIndex;
+  Player.crossfadeTriggered = false;
+  renderNowPlaying();
+  renderMiniPlayer();
+  fetchLyricsFor(currentItem());
+  preloadStandby(); // prime the (recycled) standby element with what comes after
 }
 
 /* =====================================================================
@@ -1710,6 +1785,10 @@ function bindPlayerEvents(el) {
     $('#np-time-total').textContent = fmtTime(el.duration);
     updateSyncedLyricsHighlight();
     updateMediaSessionPosition();
+    if (Player.crossfadeEnabled && !Player.crossfadeTriggered && Player.pendingNextIndex !== -1 &&
+        isFinite(el.duration) && (el.duration - el.currentTime) <= Player.crossfadeDuration) {
+      startCrossfade();
+    }
   });
 }
 bindPlayerEvents(audioA);
@@ -3416,6 +3495,26 @@ $('#header-profile-btn').addEventListener('click', () => { updateAccountSheet();
 $('#account-signin').addEventListener('click', () => { closeAllSheets(); lsSet('mylo:guest', false); $('#auth-gate').style.display = 'flex'; });
 $('#account-signout').addEventListener('click', async () => { if (supabaseClient) await supabaseClient.auth.signOut(); currentUser = null; lsSet('mylo:guest', true); closeAllSheets(); updateAccountSheet(); toast('Signed out'); });
 
+/* Crossfade setting — tap to cycle Off → 3s → 5s → 8s → Off, same
+   tap-to-cycle pattern as the sleep timer / theme toggle elsewhere. */
+const CROSSFADE_OPTIONS = [0, 3, 5, 8]; // 0 = off
+function updateCrossfadeUI() {
+  const val = Player.crossfadeEnabled ? Player.crossfadeDuration : 0;
+  $('#account-crossfade-value').textContent = val === 0 ? 'Off' : `${val}s`;
+}
+$('#account-crossfade').addEventListener('click', () => {
+  const current = Player.crossfadeEnabled ? Player.crossfadeDuration : 0;
+  const idx = CROSSFADE_OPTIONS.indexOf(current);
+  const next = CROSSFADE_OPTIONS[(idx === -1 ? 0 : idx + 1) % CROSSFADE_OPTIONS.length];
+  Player.crossfadeEnabled = next > 0;
+  if (next > 0) Player.crossfadeDuration = next;
+  if (!Player.crossfadeEnabled) cancelCrossfade();
+  lsSet('mylo:crossfadeEnabled', Player.crossfadeEnabled);
+  lsSet('mylo:crossfadeDuration', Player.crossfadeDuration);
+  updateCrossfadeUI();
+  toast(Player.crossfadeEnabled ? `Crossfade: ${Player.crossfadeDuration}s` : 'Crossfade off');
+});
+
 /* =====================================================================
    INIT
    ===================================================================== */
@@ -3517,6 +3616,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupManifest();
   checkInstallVisibility();
   setupMediaSession();
+  updateCrossfadeUI();
 });
 
 /* Registers ./sw.js if it's present alongside this file on whatever server
