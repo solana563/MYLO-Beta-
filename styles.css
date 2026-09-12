@@ -1,0 +1,371 @@
+/* ===================== CONFIG-DRIVEN APP SHELL ===================== */
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    background-color: #050505; color: #ffffff;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  /* Native apps don't have a browser's text-selection/long-press-menu chrome
+     on their controls — scope that off for buttons/nav/icons while leaving
+     genuine content (lyrics, bios, track titles) selectable as normal. */
+  button, .nav-item, nav, [role="button"] {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation; /* removes the ~300ms tap delay and disables double-tap-to-zoom on controls */
+  }
+  input, textarea { font-size: 16px; } /* iOS Safari auto-zooms the page on focus for any input under 16px — this was silently breaking the native feel on every text field */
+  ::selection { background: rgba(250, 36, 60, 0.35); }
+  html.light body { background-color: #f5f5f7; color: #0a0a0a; }
+  /* Keep content clear of notches / the home indicator when running standalone */
+  header { padding-top: env(safe-area-inset-top); }
+  #app-shell-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.1); }
+  html.light .glass { background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.06); }
+  .glass-dark { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(255, 255, 255, 0.1); }
+  html.light .glass-dark { background: rgba(255, 255, 255, 0.75); border-top: 1px solid rgba(0, 0, 0, 0.06); }
+  .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  html.light .glass-card { background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(0, 0, 0, 0.06); }
+  html.light .text-textSecondary { color: #57575c; }
+  .sheet { background: rgba(18, 18, 18, 0.9); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); }
+  html.light .sheet { background: rgba(255,255,255,0.92); }
+  .bg-gradient-mesh {
+    background: radial-gradient(at 0% 0%, rgba(250, 36, 60, 0.10) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(147, 51, 234, 0.10) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.06) 0px, transparent 50%);
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+  :focus-visible { outline: 2px solid #fa243c; outline-offset: 2px; border-radius: 4px; }
+
+  /* App shell: phone-frame up to tablet, real desktop layout from 900px up */
+  #app-shell { max-width: 480px; margin: 0 auto; position: relative; min-height: 100vh; min-height: 100dvh; }
+  @media (min-width: 640px) and (max-width: 899px) {
+    #app-shell { min-height: 90vh; margin-top: 5vh; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 90px -20px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.08); }
+    #app-scroll { max-height: 90vh; }
+  }
+  #app-scroll { overflow-y: auto; }
+
+  /* ---- Desktop (>=900px): drop the phone card, add a left sidebar ---- */
+  @media (min-width: 900px) {
+    #app-shell { max-width: none; margin: 0; min-height: 100vh; padding-left: 248px; }
+    #app-scroll { max-height: none; padding-bottom: 2rem; }
+
+    #app-shell-bottom {
+      max-width: none !important;
+      margin: 0 !important;
+      position: fixed;
+      left: 0; right: auto; top: 0; bottom: 0;
+      width: 248px;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px 20px;
+      background: rgba(10, 10, 10, 0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    html.light #app-shell-bottom { background: rgba(255, 255, 255, 0.7); border-right: 1px solid rgba(0, 0, 0, 0.06); }
+    #sidebar-brand { display: flex !important; order: 0; }
+    nav.app-bottom-nav {
+      order: 1;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+      gap: 4px;
+      padding: 8px 0 !important;
+      height: auto;
+    }
+    #mini-player-wrap { order: 2; margin-top: auto; padding: 0; }
+    .nav-item {
+      flex-direction: row !important;
+      justify-content: flex-start !important;
+      align-items: center !important;
+      gap: 14px !important;
+      padding: 11px 14px !important;
+      border-radius: 12px;
+      flex: none !important;
+    }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.06); }
+    .nav-item span { font-size: 13px; }
+
+    /* Liquid glass pill/glare/shell are a floating-bar-only effect — on desktop
+       the nav is a plain vertical list inside the already-glassy sidebar shell. */
+    nav.app-bottom-nav { box-shadow: none; overflow: visible; }
+    nav.app-bottom-nav::before { display: none; }
+    .nav-glare { display: none; }
+    .nav-active-pill { width: 100% !important; left: 0 !important; }
+
+    header, #app-scroll > .view { max-width: 1120px; margin-left: auto; margin-right: auto; }
+    header { padding-left: 2rem !important; padding-right: 2rem !important; }
+
+    /* Now Playing becomes a real centered modal instead of a stretched mobile sheet.
+       It also switches from the mobile "slide up" animation (translateY, which is
+       relative to the element's own height) to a fade+scale — translateY(100%) no
+       longer lands fully off-screen once the sheet is ~88vh instead of 100vh tall,
+       which left a sliver of it visible even when closed. */
+    /* Now Playing and Lyrics share the exact same centered-modal sizing */
+    #now-playing-sheet, #lyrics-sheet {
+      max-width: 920px !important;
+      margin: 0 auto !important;
+      top: 6vh; bottom: 6vh; left: 0; right: 0;
+      border-radius: 28px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 40px 48px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open, #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    /* Blur the app content behind these modals on desktop/landscape,
+       since they float as centered cards rather than covering the full screen. */
+    #overlay:has(+ #now-playing-sheet.open),
+    #overlay:has(+ #lyrics-sheet.open) {
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(24px) saturate(130%);
+      -webkit-backdrop-filter: blur(24px) saturate(130%);
+      transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+    }
+  }
+
+  /* Phones rotated to landscape also get the centered-modal treatment for
+     these two full-screen sheets, even under the 900px desktop breakpoint —
+     a full-bleed edge-to-edge sheet doesn't work well in a short, wide viewport. */
+  @media (orientation: landscape) and (max-width: 899px) {
+    #now-playing-sheet, #lyrics-sheet {
+      max-width: 90vw !important;
+      margin: 0 auto !important;
+      top: 4vh; bottom: 4vh; left: 0; right: 0;
+      border-radius: 24px;
+      box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 24px 28px;
+      transform: scale(0.96);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+    }
+    #now-playing-sheet.open, #lyrics-sheet.open {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Bottom sheets */
+  .bottom-sheet { transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+  .bottom-sheet.open { transform: translateY(0); }
+  .sheet-overlay { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+  .sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .marquee-track { animation: marquee 8s linear infinite; }
+  @keyframes marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(calc(-100% + 200px)); } }
+
+  .spin-slow { animation: spin 8s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .adaptive-btn { background-color: var(--dom-color, #fa243c); transition: background-color 0.8s ease; }
+  .adaptive-text { color: var(--dom-color, #fa243c); transition: color 0.8s ease; }
+  .adaptive-bar { background-color: var(--dom-color, #fa243c); transition: background-color 0.8s ease; }
+  .adaptive-glow { box-shadow: 0 20px 60px -10px var(--dom-color, #fa243c); transition: box-shadow 0.8s ease; }
+
+  #now-playing-sheet {
+    background: linear-gradient(to bottom, var(--dom-color-dark, #4a2c2a) 0%, #0f0f0f 45%, #050505 100%);
+  }
+
+  .toast { position: fixed; left: 50%; bottom: 100px; transform: translate(-50%, 20px); background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .25s ease; z-index: 200; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 37%, rgba(255,255,255,0.04) 63%); background-size: 400% 100%; animation: skeleton 1.4s ease infinite; }
+  @keyframes skeleton { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+  .nav-item.active { color: #fa243c !important; }
+  .nav-item.active span { font-weight: 700; }
+
+  /* ============ LIQUID GLASS BOTTOM NAV ============ */
+  nav.app-bottom-nav {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,0.6),
+      inset 0 2px 3px -1px rgba(255,255,255,0.25),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.05),
+      inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+  html.light nav.app-bottom-nav {
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,0.15),
+      inset 0 2px 3px -1px rgba(255,255,255,0.8),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.4),
+      inset 0 0 0 1px rgba(0,0,0,0.06);
+  }
+  /* Aqua reflection band across the top of the bar */
+  nav.app-bottom-nav::before {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px; right: 1px; height: 46%;
+    border-radius: 28px 28px 12px 12px / 28px 28px 8px 8px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+    z-index: 6;
+  }
+  /* Interactive glare that follows the pointer (desktop only — harmless on touch) */
+  .nav-glare {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    background: radial-gradient(circle 140px at var(--x,50%) var(--y,50%), rgba(255,255,255,0.35) 0%, transparent 100%);
+    mix-blend-mode: overlay;
+    z-index: 5;
+  }
+  nav.app-bottom-nav:hover .nav-glare { opacity: 1; }
+  /* Sliding active pill behind the current tab */
+  .nav-active-pill {
+    position: absolute;
+    z-index: 1;
+    top: 0; left: 0;
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25), inset 0 1px 1px rgba(255,255,255,0.3);
+    transition: transform 0.5s cubic-bezier(0.34,1.2,0.64,1), width 0.5s cubic-bezier(0.34,1.2,0.64,1), height 0.5s cubic-bezier(0.34,1.2,0.64,1);
+    pointer-events: none;
+  }
+  html.light .nav-active-pill {
+    background: rgba(255,255,255,0.55);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08), inset 0 1px 1px rgba(255,255,255,0.9);
+  }
+  nav.app-bottom-nav .nav-item { position: relative; z-index: 2; transition: transform 0.2s cubic-bezier(0.32,0.72,0,1), color 0.3s ease; }
+  nav.app-bottom-nav .nav-item:active { transform: scale(0.92); }
+  @media (min-width: 900px) { .nav-active-pill { border-radius: 12px; } }
+
+  /* Line-art nav icons (replaces solid Font Awesome glyphs in the bottom nav) */
+  .nav-icon-wrap { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+  .nav-icon-wrap svg {
+    width: 100%; height: 100%;
+    stroke-width: 2;
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), stroke-width 0.3s ease, filter 0.3s ease;
+  }
+  .nav-item.active .nav-icon-wrap svg {
+    stroke-width: 2.4;
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 6px rgba(250,36,60,0.45));
+  }
+  html.light .nav-item.active .nav-icon-wrap svg { filter: drop-shadow(0 0 5px rgba(250,36,60,0.3)); }
+  @media (min-width: 900px) { .nav-icon-wrap { width: 19px; height: 19px; } }
+
+  /* ============ LIQUID GLASS — extended to the rest of the shell ============ */
+
+  /* Header: brighter aqua top-sheen + a hairline glass edge so it reads clearly */
+  header.glass {
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(255,255,255,0.05);
+  }
+  header.glass::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 75%);
+    pointer-events: none;
+  }
+  html.light header.glass {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  html.light header.glass::after { background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 75%); }
+
+  /* Mini player: full liquid shell to match the nav bar it sits above */
+  #mini-player {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 20px 45px -18px rgba(0,0,0,0.55),
+      inset 0 2px 3px -1px rgba(255,255,255,0.25),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.05),
+      inset 0 0 0 1px rgba(255,255,255,0.12) !important;
+  }
+  html.light #mini-player {
+    box-shadow:
+      0 20px 45px -18px rgba(0,0,0,0.15),
+      inset 0 2px 3px -1px rgba(255,255,255,0.8),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.4),
+      inset 0 0 0 1px rgba(0,0,0,0.06) !important;
+  }
+  #mini-player::before {
+    content: '';
+    position: absolute; top: 1px; left: 1px; right: 1px; height: 55%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+
+  /* Bottom sheets: aqua top reflection — only visible once a sheet is actually open
+     (menu / queue / sleep timer / add-to-playlist / country / account / edit-track) */
+  .sheet { position: relative; overflow: hidden; }
+  .sheet::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 140px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  html.light .sheet::before { background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%); }
+
+  /* Glossy bevel on the primary WHITE circular play controls (Now Playing, hero,
+     featured-radio, live-preview). These sit on a solid white/black button, so a
+     white highlight on top would be invisible — instead the "glass" reads as a
+     convex bevel: a bright hairline at the top edge and a soft shaded arc at the
+     bottom, the way light wraps around a rounded glass dome. */
+  #np-playpause, .hero-play, .radio-feat-play, .live-preview-play {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 10px 24px -8px rgba(0,0,0,0.45),
+      inset 0 1px 1px rgba(255,255,255,0.95),
+      inset 0 -5px 10px rgba(0,0,0,0.16) !important;
+  }
+  #np-playpause::before, .hero-play::before, .radio-feat-play::before, .live-preview-play::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 45%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.10) 100%);
+    pointer-events: none;
+  }
+
+  /* Active chip/tab pills (video categories, library tabs) — same bevel treatment
+     as the play buttons above, since they're also solid-white when active. */
+  .video-cat.bg-white, .lib-tab.bg-white {
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow:
+      0 6px 16px -6px rgba(0,0,0,0.35),
+      inset 0 1px 1px rgba(255,255,255,0.95),
+      inset 0 -3px 6px rgba(0,0,0,0.12);
+  }
+  .video-cat.bg-white::before, .lib-tab.bg-white::before {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 55%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 100%);
+    pointer-events: none;
+  }
+
+  #yt-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
+  #yt-player-wrap iframe { width: 100%; height: 100%; }

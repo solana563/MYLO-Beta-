@@ -1,0 +1,2709 @@
+/* =====================================================================
+   MYLO — CONFIG
+   Fill in your own keys below. The app degrades gracefully without them:
+   - No Supabase key  -> guest mode, everything stored in localStorage/IndexedDB
+   - No YouTube key   -> curated fallback video list instead of live search/trending
+   ===================================================================== */
+const CONFIG = {
+  SUPABASE_URL: 'https://lwcypxiwkgphuekygrps.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3Y3lweGl3a2dwaHVla3lncnBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMjU3NzEsImV4cCI6MjA5OTcwMTc3MX0.qCLKCluVfjkByX9GqRvxcihVl0Qo8eJOhfkVXN-nqAQ',
+  YOUTUBE_API_KEY: 'AIzaSyAFSMixowk9ptdAnT6ap3aK_gKO9fOmZ0E',
+  RADIO_BROWSER_HOSTS: [
+    'https://de1.api.radio-browser.info',
+    'https://de2.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info',
+    'https://at1.api.radio-browser.info'
+  ]
+};
+
+/* =====================================================================
+   SUPABASE CLIENT
+   ===================================================================== */
+let supabaseClient = null;
+if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase) {
+  try {
+    supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  } catch (e) { console.warn('Supabase init failed', e); }
+}
+let currentUser = null;
+
+/* =====================================================================
+   TINY HELPERS
+   ===================================================================== */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
+function escapeHtml(str) { return (str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function fmtTime(sec) { if (!isFinite(sec) || sec < 0) return '0:00'; const m = Math.floor(sec / 60); const s = Math.floor(sec % 60); return `${m}:${s.toString().padStart(2, '0')}`; }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
+function haptic(ms = 8) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} } // subtle tap feedback on Android; silently does nothing on iOS/desktop
+/* Sets/clears the accent-colored "active" look on a control. This uses an inline
+   style rather than toggling the .adaptive-text class because several of these
+   buttons (shuffle, repeat, visualizer) ship with a static Tailwind `text-white`
+   class — a same-specificity class fight where `text-white` was silently always
+   winning (Tailwind's CDN stylesheet loads after our custom <style> block, so it
+   wins any specificity tie), leaving the icon white no matter what state it was
+   in. Inline style always outranks a class, so this bypasses that fight entirely. */
+function setAdaptiveActive(el, active) { if (el) el.style.color = active ? 'var(--dom-color, #fa243c)' : ''; }
+function lsGet(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function uid() { return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+/* =====================================================================
+   LOCAL STATE (favorites, recent, sleep timer)
+   ===================================================================== */
+const State = {
+  likedTracks: lsGet('mylo:likedTracks', []),      // library track ids
+  savedStations: lsGet('mylo:savedStations', []),  // radio station objects
+  recentStations: lsGet('mylo:recentStations', []),// radio station objects (max 10)
+  theme: lsGet('mylo:theme', 'dark'),
+  localCountry: lsGet('mylo:localCountry', null),  // { code, name } for Local Radio section
+  sleepTimerId: null,
+  sleepEndsAt: null,
+};
+function persistLikes() { lsSet('mylo:likedTracks', State.likedTracks); }
+function persistStations() { lsSet('mylo:savedStations', State.savedStations); lsSet('mylo:recentStations', State.recentStations); }
+function persistLocalCountry() { lsSet('mylo:localCountry', State.localCountry); }
+
+/* =====================================================================
+   PLAYLISTS — user-created, can mix local library tracks and YouTube
+   videos. Stored in localStorage: playlists hold references, not
+   copies, so a library track just points back at its LibraryDB id and
+   a YouTube item keeps a small snapshot of what it needs to play
+   (id, title, channel, thumb) since there's no local YouTube database.
+   ===================================================================== */
+const PlaylistStore = {
+  getAll() { return lsGet('mylo:playlists', []); },
+  save(playlists) { lsSet('mylo:playlists', playlists); },
+  get(id) { return this.getAll().find(p => p.id === id) || null; },
+  create(name) {
+    const playlists = this.getAll();
+    const pl = { id: uid(), name: (name || '').trim() || 'New Playlist', createdAt: Date.now(), items: [] };
+    playlists.unshift(pl);
+    this.save(playlists);
+    return pl;
+  },
+  rename(id, name) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === id);
+    if (!pl) return;
+    pl.name = (name || '').trim() || pl.name;
+    this.save(playlists);
+  },
+  remove(id) {
+    this.save(this.getAll().filter(p => p.id !== id));
+  },
+  hasItem(playlist, item) {
+    return playlist.items.some(it => it.type === item.type &&
+      (item.type === 'library' ? it.trackId === item.trackId : it.video.id === item.video.id));
+  },
+  addItem(playlistId, item) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === playlistId);
+    if (!pl) return false;
+    if (this.hasItem(pl, item)) return false;
+    pl.items.push(item);
+    this.save(playlists);
+    return true;
+  },
+  removeItemAt(playlistId, index) {
+    const playlists = this.getAll();
+    const pl = playlists.find(p => p.id === playlistId);
+    if (!pl) return;
+    pl.items.splice(index, 1);
+    this.save(playlists);
+  },
+};
+
+function pushRecentStation(station) {
+  State.recentStations = [station, ...State.recentStations.filter(s => s.stationuuid !== station.stationuuid)].slice(0, 10);
+  persistStations();
+  renderRadioRecent();
+}
+function isStationSaved(uuid) { return State.savedStations.some(s => s.stationuuid === uuid); }
+function toggleSavedStation(station) {
+  if (isStationSaved(station.stationuuid)) {
+    State.savedStations = State.savedStations.filter(s => s.stationuuid !== station.stationuuid);
+  } else {
+    State.savedStations.unshift(station);
+  }
+  persistStations();
+  renderLibraryStations();
+  return isStationSaved(station.stationuuid);
+}
+
+/* =====================================================================
+   INDEXEDDB — LOCAL MUSIC LIBRARY
+   ===================================================================== */
+/* =====================================================================
+   INDEXEDDB — LOCAL MUSIC LIBRARY
+   Two object stores, not one: `tracks` holds only lightweight metadata
+   (title/artist/album/art/duration — a few hundred bytes each), and
+   `blobs` holds the raw audio file data, keyed by the same id. Listing,
+   searching, grouping by artist/album, and editing song info only ever
+   touch `tracks` — none of that has to move megabytes of audio through
+   IndexedDB or hold it in memory. A track's blob is fetched from `blobs`
+   the moment it's actually about to play, via LibraryDB.getBlob(id), and
+   nowhere else. This is what makes a 1000+ song library behave the same
+   as a 10 song one for every screen except "press play."
+   ===================================================================== */
+const LibraryDB = (() => {
+  let dbPromise = null;
+  function open() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open('mylo-library', 2);
+      req.onupgradeneeded = (event) => {
+        const db = req.result;
+        const tx = req.transaction;
+        const tracksStore = db.objectStoreNames.contains('tracks')
+          ? tx.objectStore('tracks')
+          : (() => { const s = db.createObjectStore('tracks', { keyPath: 'id' }); s.createIndex('addedAt', 'addedAt'); return s; })();
+        const blobsStore = db.objectStoreNames.contains('blobs')
+          ? tx.objectStore('blobs')
+          : db.createObjectStore('blobs', { keyPath: 'id' });
+        // Migrating from v1: existing records still carry an inline `blob` field.
+        // Split it out into `blobs` and strip it from the metadata record so every
+        // future load of the library only ever reads the small stuff.
+        if (event.oldVersion < 2) {
+          const cursorReq = tracksStore.openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (!cursor) return;
+            const rec = cursor.value;
+            if (rec.blob) {
+              blobsStore.put({ id: rec.id, blob: rec.blob });
+              const { blob, ...meta } = rec;
+              cursor.update(meta);
+            }
+            cursor.continue();
+          };
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+  async function addTrack(file) {
+    const db = await open();
+    const id = uid();
+    const rec = {
+      id,
+      name: file.name.replace(/\.[^/.]+$/, ''),
+      artist: 'Unknown Artist',
+      album: '',
+      genre: '',
+      year: '',
+      artDataUrl: null,   // embedded ID3/MP4 artwork, base64 data URL
+      artUrl: null,        // iTunes artwork fallback (remote URL)
+      duration: null,
+      type: file.type || 'audio/mpeg',
+      addedAt: Date.now(),
+    };
+    // Enrich with real metadata before saving (title/artist/album/embedded art)
+    await enrichTrackMetadata(rec, file);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['tracks', 'blobs'], 'readwrite');
+      tx.objectStore('tracks').add(rec);
+      tx.objectStore('blobs').add({ id, blob: file });
+      tx.oncomplete = () => resolve(rec);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function updateTrack(rec) {
+    // Metadata-only write — editing a title/artist/artwork no longer means
+    // reading and rewriting that track's entire multi-MB audio blob.
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('tracks', 'readwrite');
+      tx.objectStore('tracks').put(rec);
+      tx.oncomplete = () => resolve(rec);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function getAll() {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('tracks', 'readonly');
+      const req = tx.objectStore('tracks').getAll();
+      req.onsuccess = () => resolve(req.result.sort((a, b) => b.addedAt - a.addedAt));
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function getBlob(id) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('blobs', 'readonly');
+      const req = tx.objectStore('blobs').get(id);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function remove(id) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['tracks', 'blobs'], 'readwrite');
+      tx.objectStore('tracks').delete(id);
+      tx.objectStore('blobs').delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function get(id) {
+    // Direct keyed lookup instead of getAll().find(...) — O(1) against the
+    // index instead of pulling every track's metadata to find one of them.
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('tracks', 'readonly');
+      const req = tx.objectStore('tracks').get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return { addTrack, updateTrack, getAll, getBlob, remove, get };
+})();
+
+/* ---- Metadata enrichment: ID3/MP4 tags via jsmediatags, iTunes artwork fallback, real duration ---- */
+function readTagsFromFile(file) {
+  return new Promise((resolve) => {
+    if (!window.jsmediatags) { resolve(null); return; }
+    window.jsmediatags.read(file, {
+      onSuccess: (tag) => resolve(tag.tags || null),
+      onError: () => resolve(null),
+    });
+  });
+}
+/* Downscales embedded album art (which can be several MB straight off an MP3/FLAC)
+   down to a small JPEG before it's ever turned into a base64 string. This is the
+   single biggest win for large libraries: without it, a few hundred tracks with
+   full-resolution embedded covers can balloon into hundreds of MB of base64 text
+   sitting in IndexedDB and in memory every time the library loads. */
+function downscaleImageBytes(bytes, mimeType, maxDim = 400, quality = 0.82) {
+  return new Promise((resolve) => {
+    try {
+      const blob = new Blob([bytes], { type: mimeType || 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      const timeout = setTimeout(() => { URL.revokeObjectURL(url); resolve(null); }, 5000);
+      img.onload = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch (e) { resolve(null); }
+  });
+}
+function readDurationFromFile(file) {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const probe = new Audio();
+      const cleanup = () => URL.revokeObjectURL(url);
+      const timeout = setTimeout(() => { cleanup(); resolve(null); }, 6000);
+      probe.addEventListener('loadedmetadata', () => { clearTimeout(timeout); const d = probe.duration; cleanup(); resolve(isFinite(d) ? d : null); });
+      probe.addEventListener('error', () => { clearTimeout(timeout); cleanup(); resolve(null); });
+      probe.preload = 'metadata';
+      probe.src = url;
+    } catch (e) { resolve(null); }
+  });
+}
+async function fetchITunesArtwork(title, artist) {
+  try {
+    const term = [title, artist !== 'Unknown Artist' ? artist : ''].filter(Boolean).join(' ');
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=1`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hit = data.results && data.results[0];
+    if (!hit || !hit.artworkUrl100) return null;
+    return hit.artworkUrl100.replace('100x100', '600x600');
+  } catch (e) { return null; }
+}
+async function enrichTrackMetadata(rec, file) {
+  const tags = await readTagsFromFile(file);
+  if (tags) {
+    if (tags.title) rec.name = tags.title;
+    if (tags.artist) rec.artist = tags.artist;
+    if (tags.album) rec.album = tags.album;
+    if (tags.genre) rec.genre = tags.genre;
+    if (tags.year) rec.year = String(tags.year);
+    if (tags.picture && tags.picture.data) {
+      const dataUrl = await downscaleImageBytes(new Uint8Array(tags.picture.data), tags.picture.format);
+      if (dataUrl) rec.artDataUrl = dataUrl;
+    }
+  }
+  rec.duration = await readDurationFromFile(file);
+  if (!rec.artDataUrl) {
+    const remoteArt = await fetchITunesArtwork(rec.name, rec.artist);
+    if (remoteArt) rec.artUrl = remoteArt;
+  }
+  return rec;
+}
+
+let libraryCache = [];
+async function refreshLibraryCache() { libraryCache = await LibraryDB.getAll(); return libraryCache; }
+
+/* =====================================================================
+   RADIO — radio-browser.info API (with mirror fallback)
+   ===================================================================== */
+const RadioAPI = (() => {
+  let workingHost = null;
+  async function req(path) {
+    const hosts = workingHost ? [workingHost, ...CONFIG.RADIO_BROWSER_HOSTS.filter(h => h !== workingHost)] : CONFIG.RADIO_BROWSER_HOSTS;
+    let lastErr = null;
+    for (const host of hosts) {
+      try {
+        const res = await fetch(host + path, { headers: { 'User-Agent': 'MYLO/1.0' } });
+        if (!res.ok) throw new Error('bad status ' + res.status);
+        const data = await res.json();
+        workingHost = host;
+        return data;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('All radio-browser hosts failed');
+  }
+  const topStations = (limit = 20) => req(`/json/stations/topvote/${limit}`);
+  const searchStations = (name, limit = 25) => req(`/json/stations/search?name=${encodeURIComponent(name)}&limit=${limit}&hidebroken=true`);
+  const byTag = (tag, limit = 20) => req(`/json/stations/bytag/${encodeURIComponent(tag)}?limit=${limit}&hidebroken=true`);
+  const topTags = (limit = 12) => req(`/json/tags?order=stationcount&reverse=true&limit=${limit}`);
+  const byCountryCode = (code, limit = 15) => req(`/json/stations/bycountrycodeexact/${encodeURIComponent(code)}?limit=${limit}&hidebroken=true&order=clickcount&reverse=true`);
+  const countries = () => req(`/json/countries?order=name`);
+  return { topStations, searchStations, byTag, topTags, byCountryCode, countries };
+})();
+
+const GENRE_ICONS = {
+  electronic: 'fa-bolt', pop: 'fa-fire', chill: 'fa-leaf', jazz: 'fa-record-vinyl',
+  rock: 'fa-guitar', hiphop: 'fa-microphone', classical: 'fa-music', news: 'fa-newspaper',
+  talk: 'fa-comments', dance: 'fa-star', reggae: 'fa-sun', country: 'fa-hat-cowboy',
+};
+function genreIcon(tag) {
+  const key = Object.keys(GENRE_ICONS).find(k => (tag || '').toLowerCase().includes(k));
+  return GENRE_ICONS[key] || 'fa-radio';
+}
+
+/* =====================================================================
+   YOUTUBE — Data API v3 (search/trending) + IFrame Player API (playback)
+   ===================================================================== */
+const FALLBACK_VIDEOS = [
+  { id: 'jfKfPfyJRdk', title: 'lofi hip hop radio - beats to relax/study to', channel: 'Lofi Girl', views: '—', thumb: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg' },
+  { id: '5qap5aO4i9A', title: 'lofi hip hop radio - beats to sleep/chill to', channel: 'Lofi Girl', views: '—', thumb: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg' },
+  { id: 'DWcJFNfaw9c', title: 'Alan Walker — Faded', channel: 'Alan Walker', views: '—', thumb: 'https://i.ytimg.com/vi/DWcJFNfaw9c/hqdefault.jpg' },
+  { id: '2Vv-BfVoq4g', title: 'Ed Sheeran — Perfect', channel: 'Ed Sheeran', views: '—', thumb: 'https://i.ytimg.com/vi/2Vv-BfVoq4g/hqdefault.jpg' },
+  { id: 'kJQP7kiw5Fk', title: 'Luis Fonsi — Despacito ft. Daddy Yankee', channel: 'Luis Fonsi', views: '—', thumb: 'https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg' },
+  { id: 'fJ9rUzIMcZQ', title: 'Queen — Bohemian Rhapsody', channel: 'Queen Official', views: '—', thumb: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg' },
+];
+
+const YouTubeAPI = (() => {
+  const hasKey = () => !!CONFIG.YOUTUBE_API_KEY;
+  async function search(query, max = 12) {
+    if (!hasKey()) return FALLBACK_VIDEOS;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${max}&q=${encodeURIComponent(query)}&videoCategoryId=10&key=${CONFIG.YOUTUBE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('YouTube search failed: ' + res.status);
+    const data = await res.json();
+    return data.items.map(it => ({
+      id: it.id.videoId,
+      title: it.snippet.title,
+      channel: it.snippet.channelTitle,
+      views: '',
+      thumb: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
+    }));
+  }
+  async function trending(max = 12) {
+    if (!hasKey()) return FALLBACK_VIDEOS;
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&maxResults=${max}&videoCategoryId=10&key=${CONFIG.YOUTUBE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('YouTube trending failed: ' + res.status);
+    const data = await res.json();
+    return data.items.map(it => ({
+      id: it.id,
+      title: it.snippet.title,
+      channel: it.snippet.channelTitle,
+      views: it.statistics?.viewCount ? formatViews(it.statistics.viewCount) : '',
+      thumb: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
+    }));
+  }
+  return { search, trending, hasKey };
+})();
+
+function formatViews(n) {
+  n = parseInt(n, 10);
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B views';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M views';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K views';
+  return n + ' views';
+}
+
+// YouTube IFrame Player API loader
+let ytApiReady = null;
+function loadYouTubeIframeAPI() {
+  if (ytApiReady) return ytApiReady;
+  ytApiReady = new Promise((resolve) => {
+    if (window.YT && window.YT.Player) return resolve(window.YT);
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+  });
+  return ytApiReady;
+}
+let ytPlayer = null;
+
+/* =====================================================================
+   PLAYER ENGINE — unified for Radio + Library (HTML5 audio)
+   ===================================================================== */
+/* =====================================================================
+   DUAL-BUFFER AUDIO ENGINE — enables gapless playback for local library
+   audio. Two real <audio> elements are kept: one "active" (currently
+   audible) and one "standby" (silently preloaded with the next track).
+   When the active track ends, playback swaps to the already-buffered
+   standby element instantly instead of creating/loading a new source,
+   eliminating the decode/start gap between local tracks.
+   ===================================================================== */
+const audioA = document.getElementById('audio-el');
+const audioB = document.createElement('audio');
+audioB.preload = 'auto';
+audioB.crossOrigin = 'anonymous';
+audioB.style.display = 'none';
+document.body.appendChild(audioB);
+
+let activeAudio = audioA;
+let standbyAudio = audioB;
+
+// `audioEl` transparently proxies to whichever element is currently active,
+// so all existing playback/UI code below keeps working unchanged.
+const audioEl = new Proxy({}, {
+  get(_, prop) { const v = activeAudio[prop]; return typeof v === 'function' ? v.bind(activeAudio) : v; },
+  set(_, prop, value) { activeAudio[prop] = value; return true; },
+});
+
+/* =====================================================================
+   VISUALIZER — Web Audio AnalyserNode tapped off each real <audio>
+   element, drawn as animated frequency bars in the Now Playing sheet.
+   A separate analyser is wired to audioA and audioB (each media element
+   can only ever be routed through Web Audio once), and the draw loop
+   simply reads whichever one is currently active — so gapless swaps
+   between them keep working exactly as before.
+
+   Note: this only works for radio/library playback (native <audio>
+   elements). YouTube video plays through a sandboxed iframe the page
+   has no raw audio access to, so there's no visualizer for that. Radio
+   streams also need the station's server to send CORS headers for the
+   frequency data to be readable — playback itself is unaffected either
+   way, but a station without CORS support will show flat/quiet bars.
+   ===================================================================== */
+let audioCtx = null;
+let analyserA = null, analyserB = null;
+let visualizerActive = false;
+let visualizerRAF = null;
+
+function ensureAudioGraph() {
+  if (audioCtx) return true;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return false;
+    audioCtx = new Ctx();
+    const sourceA = audioCtx.createMediaElementSource(audioA);
+    analyserA = audioCtx.createAnalyser();
+    analyserA.fftSize = 128;
+    analyserA.smoothingTimeConstant = 0.75;
+    sourceA.connect(analyserA);
+    analyserA.connect(audioCtx.destination);
+
+    const sourceB = audioCtx.createMediaElementSource(audioB);
+    analyserB = audioCtx.createAnalyser();
+    analyserB.fftSize = 128;
+    analyserB.smoothingTimeConstant = 0.75;
+    sourceB.connect(analyserB);
+    analyserB.connect(audioCtx.destination);
+    return true;
+  } catch (e) {
+    console.warn('Visualizer unavailable:', e);
+    audioCtx = null;
+    return false;
+  }
+}
+function currentAnalyser() { return activeAudio === audioA ? analyserA : analyserB; }
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawVisualizerFrame() {
+  if (!visualizerActive) return;
+  visualizerRAF = requestAnimationFrame(drawVisualizerFrame);
+  const analyser = currentAnalyser();
+  const canvas = $('#np-visualizer-canvas');
+  if (!analyser || !canvas) return;
+  const w = canvas.width = canvas.clientWidth;
+  const h = canvas.height = canvas.clientHeight;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--dom-color').trim() || '#fa243c';
+  const barCount = 32;
+  const step = Math.max(1, Math.floor(data.length / barCount));
+  const barWidth = w / barCount;
+  ctx.fillStyle = color;
+  for (let i = 0; i < barCount; i++) {
+    const value = data[i * step] || 0;
+    const pct = value / 255;
+    const barHeight = Math.max(3, pct * h * 0.92);
+    const x = i * barWidth;
+    const y = h - barHeight;
+    ctx.globalAlpha = 0.45 + pct * 0.55;
+    roundRectPath(ctx, x + barWidth * 0.18, y, barWidth * 0.64, barHeight, barWidth * 0.3);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function setVisualizerVisible(show) {
+  if (show) {
+    $('#np-art').classList.add('hidden');
+    $('#np-art-fallback').classList.add('hidden');
+    $('#np-visualizer-canvas').classList.remove('hidden');
+  } else {
+    $('#np-visualizer-canvas').classList.add('hidden');
+    // art/fallback visibility gets restored by the renderNowPlaying() call right after this
+  }
+}
+function startVisualizer() {
+  visualizerActive = true;
+  setVisualizerVisible(true);
+  setAdaptiveActive($('#np-visualizer-toggle'), true);
+  drawVisualizerFrame();
+}
+function stopVisualizer() {
+  visualizerActive = false;
+  pauseVisualizerLoop();
+  setAdaptiveActive($('#np-visualizer-toggle'), false);
+  setVisualizerVisible(false);
+  renderNowPlaying(); // restore correct art/fallback visibility for the current track
+}
+function pauseVisualizerLoop() {
+  if (visualizerRAF) { cancelAnimationFrame(visualizerRAF); visualizerRAF = null; }
+}
+function resumeVisualizerLoopIfNeeded() {
+  if (visualizerActive && !visualizerRAF) drawVisualizerFrame();
+}
+$('#np-visualizer-toggle').addEventListener('click', async () => {
+  if (!Player.mode) { toast('Play something first'); return; }
+  if (!ensureAudioGraph()) { toast('Visualizer is not supported in this browser'); return; }
+  if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (e) {} }
+  if (visualizerActive) stopVisualizer(); else startVisualizer();
+});
+
+const Player = {
+  mode: null,        // 'radio' | 'library'
+  queue: [],
+  index: -1,
+  pendingNextIndex: -1, // index preloaded into standbyAudio, for gapless swap
+  shuffle: false,
+  repeat: false,
+  sleepTimeout: null,
+};
+
+function currentItem() { return Player.index >= 0 ? Player.queue[Player.index] : null; }
+
+function setActiveSrcFromUrl(url) {
+  if (activeAudio._objUrl) { URL.revokeObjectURL(activeAudio._objUrl); activeAudio._objUrl = null; }
+  activeAudio.src = url;
+}
+function setActiveSrcFromBlob(blob) {
+  if (activeAudio._objUrl) URL.revokeObjectURL(activeAudio._objUrl);
+  const url = URL.createObjectURL(blob);
+  activeAudio._objUrl = url;
+  activeAudio.src = url;
+  return url;
+}
+function clearStandby() {
+  if (standbyAudio._objUrl) { URL.revokeObjectURL(standbyAudio._objUrl); standbyAudio._objUrl = null; }
+  standbyAudio.removeAttribute('src');
+  standbyAudio.load();
+  Player.pendingNextIndex = -1;
+}
+function computeNextIndex(fromIndex) {
+  if (!Player.queue.length) return -1;
+  if (Player.shuffle) {
+    if (Player.queue.length === 1) return Player.repeat ? fromIndex : -1;
+    let idx;
+    do { idx = Math.floor(Math.random() * Player.queue.length); } while (idx === fromIndex);
+    return idx;
+  }
+  if (fromIndex < Player.queue.length - 1) return fromIndex + 1;
+  if (Player.repeat) return 0;
+  return -1;
+}
+/* Preload the next library track into the silent standby element, ready
+   for an instant, gapless swap once the active track ends. Fetches only
+   that one track's blob from IndexedDB — never the whole library. */
+async function preloadStandby() {
+  if (Player.mode !== 'library') { clearStandby(); return; }
+  const nextIdx = computeNextIndex(Player.index);
+  Player.pendingNextIndex = nextIdx;
+  if (nextIdx === -1) { clearStandby(); return; }
+  const track = Player.queue[nextIdx];
+  if (!track) { clearStandby(); return; }
+  const requestedIndex = nextIdx; // guard against a rapid shuffle/repeat toggle or skip racing this fetch
+  const blob = await LibraryDB.getBlob(track.id);
+  if (!blob || Player.pendingNextIndex !== requestedIndex) return;
+  if (standbyAudio._objUrl) URL.revokeObjectURL(standbyAudio._objUrl);
+  const url = URL.createObjectURL(blob);
+  standbyAudio._objUrl = url;
+  standbyAudio.src = url;
+  standbyAudio.load();
+}
+
+async function playRadioStation(station, listContext) {
+  Player.mode = 'radio';
+  Player.queue = listContext && listContext.length ? listContext : [station];
+  Player.index = Player.queue.findIndex(s => s.stationuuid === station.stationuuid);
+  if (Player.index === -1) { Player.queue = [station]; Player.index = 0; }
+  clearStandby(); // gapless preloading only applies to local library playback
+  const url = station.url_resolved || station.url;
+  setActiveSrcFromUrl(url);
+  try { await audioEl.play(); } catch (e) { console.warn('play failed', e); toast('Could not play this station'); }
+  pushRecentStation(station);
+  renderNowPlaying();
+  renderMiniPlayer();
+  showMiniPlayer();
+}
+
+async function playLibraryTrack(trackId, listContext) {
+  await refreshLibraryCache();
+  Player.mode = 'library';
+  Player.queue = listContext && listContext.length ? listContext : libraryCache;
+  Player.index = Player.queue.findIndex(t => t.id === trackId);
+  if (Player.index === -1) { Player.index = 0; }
+  const track = Player.queue[Player.index];
+  if (!track) return;
+  const blob = await LibraryDB.getBlob(track.id); // only this one track's audio data is fetched
+  if (!blob) { toast('Could not find this file'); return; }
+  setActiveSrcFromBlob(blob);
+  try { await audioEl.play(); } catch (e) { console.warn('play failed', e); }
+  renderNowPlaying();
+  renderMiniPlayer();
+  showMiniPlayer();
+  fetchLyricsFor(track);
+  preloadStandby();
+}
+
+function togglePlayPause() {
+  if (!Player.mode) return;
+  haptic();
+  if (audioEl.paused) { audioEl.play().catch(() => {}); } else { audioEl.pause(); }
+}
+
+function playNext(auto) {
+  if (!Player.queue.length) return;
+  if (Player.shuffle) {
+    Player.index = Math.floor(Math.random() * Player.queue.length);
+  } else {
+    if (Player.index < Player.queue.length - 1) Player.index++;
+    else if (Player.repeat) Player.index = 0;
+    else if (auto) { return; } // end of queue, stop
+    else Player.index = 0;
+  }
+  resumeFromIndex();
+}
+function playPrev() {
+  if (!Player.queue.length) return;
+  if (audioEl.currentTime > 3 && Player.mode === 'library') { audioEl.currentTime = 0; return; }
+  Player.index = Player.index > 0 ? Player.index - 1 : Player.queue.length - 1;
+  resumeFromIndex();
+}
+/* Manual jump (prev/next tap, queue selection). Not part of the gapless
+   auto-advance path, so it always (re)builds the source directly, then
+   re-primes the standby element for the position that follows. */
+async function resumeFromIndex() {
+  const item = currentItem();
+  if (!item) return;
+  if (Player.mode === 'radio') {
+    const url = item.url_resolved || item.url;
+    setActiveSrcFromUrl(url);
+    audioEl.play().catch(() => {});
+    pushRecentStation(item);
+  } else {
+    const blob = await LibraryDB.getBlob(item.id);
+    if (!blob) { toast('Could not find this file'); return; }
+    setActiveSrcFromBlob(blob);
+    audioEl.play().catch(() => {});
+    fetchLyricsFor(item);
+  }
+  renderNowPlaying();
+  renderMiniPlayer();
+  preloadStandby();
+}
+
+/* Gapless swap: fires only when the ACTIVE element ends. If the next
+   track is already buffered in standby, we swap roles and start it
+   instantly instead of tearing down/rebuilding a source. */
+function handleEnded(sourceEl) {
+  if (sourceEl !== activeAudio) return;
+  if (Player.mode === 'library' && Player.pendingNextIndex !== -1 && standbyAudio.src && standbyAudio.readyState >= 2) {
+    const finished = activeAudio;
+    activeAudio = standbyAudio;
+    standbyAudio = finished;
+    Player.index = Player.pendingNextIndex;
+    activeAudio.currentTime = 0;
+    activeAudio.play().catch(() => {});
+    renderNowPlaying();
+    renderMiniPlayer();
+    fetchLyricsFor(currentItem());
+    preloadStandby(); // prime the (recycled) standby element with what comes after
+  } else if (Player.mode === 'library') {
+    playNext(true); // no preload ready (e.g. end of queue) — fall back to a normal advance
+  }
+}
+
+/* =====================================================================
+   MEDIA SESSION — lock-screen, notification-shade, and Bluetooth/headset
+   playback controls, plus the track title/artist/art shown there. Only
+   covers radio + library playback (our own dual <audio> elements) — a
+   YouTube video plays inside a sandboxed iframe outside our control, so
+   metadata is explicitly cleared when switching to video rather than
+   leaving stale "now playing" info for audio that's actually paused.
+   ===================================================================== */
+function setupMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  try { navigator.mediaSession.setActionHandler('play', () => audioEl.play().catch(() => {})); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('pause', () => audioEl.pause()); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('previoustrack', () => playPrev()); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false)); } catch (e) {}
+  try { navigator.mediaSession.setActionHandler('stop', () => audioEl.pause()); } catch (e) {}
+  try {
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (Player.mode !== 'library' || !isFinite(audioEl.duration)) return; // radio is live — nothing to seek
+      if (details.fastSeek && 'fastSeek' in audioEl) { audioEl.fastSeek(details.seekTime); return; }
+      audioEl.currentTime = details.seekTime;
+    });
+  } catch (e) { /* seekto isn't supported on every platform — fine to skip */ }
+}
+function updateMediaSessionMetadata() {
+  if (!('mediaSession' in navigator)) return;
+  const item = currentItem();
+  if (!item || (Player.mode !== 'radio' && Player.mode !== 'library')) {
+    navigator.mediaSession.metadata = null;
+    return;
+  }
+  let title, artist, album, art;
+  if (Player.mode === 'radio') {
+    title = item.name || 'Radio';
+    artist = (item.tags || 'Live radio').split(',')[0];
+    album = item.country || 'MYLO Radio';
+    art = item.favicon;
+  } else {
+    title = item.name || 'Untitled';
+    artist = item.artist || 'Unknown Artist';
+    album = item.album || 'MYLO Library';
+    art = trackArtSrc(item);
+  }
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title, artist, album,
+      artwork: art ? [{ src: art, sizes: '512x512', type: 'image/png' }] : [],
+    });
+  } catch (e) {}
+}
+function updateMediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
+  try {
+    if (Player.mode !== 'library' || !isFinite(audioEl.duration) || audioEl.duration <= 0) {
+      navigator.mediaSession.setPositionState(); // live stream / unknown duration — no scrubber
+      return;
+    }
+    navigator.mediaSession.setPositionState({
+      duration: audioEl.duration,
+      playbackRate: audioEl.playbackRate || 1,
+      position: Math.min(audioEl.currentTime, audioEl.duration),
+    });
+  } catch (e) {}
+}
+
+function bindPlayerEvents(el) {
+  el.addEventListener('play', () => { if (el === activeAudio) { updatePlayIcons(true); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; } });
+  el.addEventListener('pause', () => { if (el === activeAudio) { updatePlayIcons(false); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; } });
+  el.addEventListener('ended', () => handleEnded(el));
+  el.addEventListener('timeupdate', () => {
+    if (el !== activeAudio || Player.mode !== 'library') return;
+    const pct = el.duration ? (el.currentTime / el.duration) * 100 : 0;
+    $('#np-progress-bar').style.width = pct + '%';
+    $('#np-time-current').textContent = fmtTime(el.currentTime);
+    $('#np-time-total').textContent = fmtTime(el.duration);
+    updateSyncedLyricsHighlight();
+    updateMediaSessionPosition();
+  });
+}
+bindPlayerEvents(audioA);
+bindPlayerEvents(audioB);
+
+function updatePlayIcons(playing) {
+  const icon = playing ? 'fa-pause' : 'fa-play ml-1';
+  $('#np-playpause').innerHTML = `<i class="fa-solid ${playing ? 'fa-pause' : 'fa-play ml-1'}"></i>`;
+  $('#mini-playpause').innerHTML = `<i class="fa-solid ${playing ? 'fa-pause' : 'fa-play'}"></i>`;
+}
+
+/* Sleep timer */
+function setSleepTimer(minutes) {
+  if (Player.sleepTimeout) clearTimeout(Player.sleepTimeout);
+  State.sleepEndsAt = Date.now() + minutes * 60000;
+  Player.sleepTimeout = setTimeout(() => { audioEl.pause(); toast('Sleep timer ended'); State.sleepEndsAt = null; updateSleepStatus(); }, minutes * 60000);
+  updateSleepStatus();
+  toast(`Sleep timer set for ${minutes} min`);
+}
+function cancelSleepTimer() {
+  if (Player.sleepTimeout) clearTimeout(Player.sleepTimeout);
+  State.sleepEndsAt = null;
+  updateSleepStatus();
+  toast('Sleep timer cancelled');
+}
+function updateSleepStatus() {
+  const s = $('#sleep-status');
+  if (State.sleepEndsAt) {
+    const mins = Math.max(0, Math.round((State.sleepEndsAt - Date.now()) / 60000));
+    s.textContent = `Stops playback in ~${mins} min`;
+  } else {
+    s.textContent = '';
+  }
+}
+
+/* =====================================================================
+   SYNCED LYRICS — lrclib.net (LRC time-tagged format when available)
+   ===================================================================== */
+const Lyrics = {
+  lines: [],        // [{ time: seconds, text }]
+  synced: false,
+  activeIndex: -1,
+};
+
+function parseLRC(lrc) {
+  const lines = [];
+  const timeTag = /\[(\d{2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+  lrc.split('\n').forEach(rawLine => {
+    const tags = [...rawLine.matchAll(timeTag)];
+    if (!tags.length) return;
+    const text = rawLine.replace(timeTag, '').trim();
+    if (!text) return;
+    tags.forEach(m => {
+      const min = parseInt(m[1], 10);
+      const sec = parseInt(m[2], 10);
+      const ms = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) : 0;
+      lines.push({ time: min * 60 + sec + ms / 1000, text });
+    });
+  });
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+async function fetchLyricsFor(track) {
+  const card = $('#np-lyrics-card');
+  const preview = $('#np-lyrics-preview');
+  const content = $('#lyrics-content');
+  card.classList.add('hidden');
+  content.innerHTML = '';
+  Lyrics.lines = []; Lyrics.synced = false; Lyrics.activeIndex = -1;
+  if (!track) return;
+  try {
+    const artistParam = track.artist && track.artist !== 'Unknown Artist' ? `&artist_name=${encodeURIComponent(track.artist)}` : '';
+    const url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(track.name)}${artistParam}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('lyrics lookup failed');
+    const results = await res.json();
+    const best = results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || results[0];
+    if (!best || (!best.syncedLyrics && !best.plainLyrics)) return;
+
+    if (best.syncedLyrics) {
+      Lyrics.lines = parseLRC(best.syncedLyrics);
+      Lyrics.synced = Lyrics.lines.length > 0;
+    }
+    if (!Lyrics.synced) {
+      Lyrics.lines = best.plainLyrics.split('\n').filter(Boolean).map(text => ({ time: null, text }));
+    }
+    if (!Lyrics.lines.length) return;
+
+    card.classList.remove('hidden');
+    card.style.display = 'flex';
+    preview.textContent = Lyrics.lines[0].text || 'Lyrics found';
+    renderLyricsSheet();
+  } catch (e) {
+    // silent — lyrics are a bonus, not critical
+  }
+}
+
+function renderLyricsSheet() {
+  const content = $('#lyrics-content');
+  content.innerHTML = '';
+  Lyrics.lines.forEach((line, i) => {
+    const p = el('p', `lyric-line transition-all duration-300 ${Lyrics.synced ? 'cursor-pointer text-white/40' : 'text-white/80'}`, escapeHtml(line.text));
+    p.dataset.index = i;
+    if (Lyrics.synced) {
+      p.addEventListener('click', () => { if (Player.mode === 'library' && line.time !== null) audioEl.currentTime = line.time; });
+    }
+    content.appendChild(p);
+  });
+  if (!Lyrics.synced) {
+    const note = el('p', 'text-white/30 text-xs font-normal mt-6', 'Time-synced lyrics not available for this track — showing full lyrics.');
+    content.appendChild(note);
+  }
+}
+
+function updateSyncedLyricsHighlight() {
+  if (!Lyrics.synced || !Lyrics.lines.length || Player.mode !== 'library') return;
+  const t = audioEl.currentTime;
+  let idx = -1;
+  for (let i = 0; i < Lyrics.lines.length; i++) {
+    if (Lyrics.lines[i].time <= t) idx = i; else break;
+  }
+  if (idx === Lyrics.activeIndex) return;
+  Lyrics.activeIndex = idx;
+
+  // Update mini preview in the Now Playing card
+  if (idx >= 0) $('#np-lyrics-preview').textContent = Lyrics.lines[idx].text;
+
+  // Update highlighted line in the full lyrics sheet
+  const nodes = $$('.lyric-line', $('#lyrics-content'));
+  nodes.forEach((node, i) => {
+    const active = i === idx;
+    node.classList.toggle('text-white/40', !active);
+    node.classList.toggle('text-white', active);
+    node.classList.toggle('scale-105', active);
+    if (active && $('#lyrics-sheet').classList.contains('open')) {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+}
+
+
+/* =====================================================================
+   ADAPTIVE COLOR EXTRACTION (from 08-NowPlaying design)
+   ===================================================================== */
+function extractDominantColor(img) {
+  try {
+    const canvas = document.getElementById('colorCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 40; canvas.height = 40;
+    ctx.drawImage(img, 0, 0, 40, 40);
+    const data = ctx.getImageData(0, 0, 40, 40).data;
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; count++; }
+    r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
+    const boost = 1.15; const avg = (r + g + b) / 3;
+    r = Math.min(255, Math.max(0, avg + (r - avg) * boost));
+    g = Math.min(255, Math.max(0, avg + (g - avg) * boost));
+    b = Math.min(255, Math.max(0, avg + (b - avg) * boost));
+    document.documentElement.style.setProperty('--dom-color', `rgb(${r}, ${g}, ${b})`);
+    document.documentElement.style.setProperty('--dom-color-dark', `rgb(${Math.floor(r * 0.22)}, ${Math.floor(g * 0.22)}, ${Math.floor(b * 0.22)})`);
+  } catch (e) { resetDominantColor(); }
+}
+function resetDominantColor() {
+  document.documentElement.style.setProperty('--dom-color', '#fa243c');
+  document.documentElement.style.setProperty('--dom-color-dark', '#2a0a0d');
+}
+
+/* =====================================================================
+   MINI PLAYER + NOW PLAYING SHEET RENDER
+   ===================================================================== */
+function showMiniPlayer() { $('#mini-player').classList.remove('hidden'); }
+
+function renderMiniPlayer() {
+  const item = currentItem();
+  if (!item) return;
+  const artWrap = $('#mini-art-wrap'), art = $('#mini-art'), icon = $('#mini-art-icon');
+  if (Player.mode === 'radio') {
+    $('#mini-title').textContent = item.name || 'Radio';
+    $('#mini-subtitle').textContent = item.tags ? item.tags.split(',')[0] : 'Live radio';
+    if (item.favicon) { art.src = item.favicon; art.classList.remove('hidden'); icon.classList.add('hidden'); art.onerror = () => { art.classList.add('hidden'); icon.classList.remove('hidden'); }; }
+    else { art.classList.add('hidden'); icon.classList.remove('hidden'); icon.className = 'fa-solid fa-tower-broadcast text-white text-sm'; }
+  } else {
+    $('#mini-title').textContent = item.name || 'Untitled';
+    $('#mini-subtitle').textContent = item.artist || 'Unknown Artist';
+    const src = trackArtSrc(item);
+    if (src) { art.src = src; art.classList.remove('hidden'); icon.classList.add('hidden'); art.onerror = () => { art.classList.add('hidden'); icon.classList.remove('hidden'); }; }
+    else { art.classList.add('hidden'); icon.classList.remove('hidden'); icon.className = 'fa-solid fa-music text-white text-sm'; }
+  }
+  updatePlayIcons(!audioEl.paused);
+}
+
+function renderNowPlaying() {
+  const item = currentItem();
+  if (!item) return;
+  resetDominantColor();
+  updateMediaSessionMetadata();
+  updateMediaSessionPosition();
+  const art = $('#np-art'), fallback = $('#np-art-fallback');
+  setAdaptiveActive($('#np-shuffle'), Player.shuffle);
+  setAdaptiveActive($('#np-repeat'), Player.repeat);
+
+  if (Player.mode === 'radio') {
+    $('#np-source-label').textContent = 'Playing from Radio';
+    $('#np-source-name').textContent = item.country || 'Live';
+    $('#np-title').textContent = item.name || 'Radio Station';
+    $('#np-subtitle').textContent = (item.tags || 'live radio').split(',').slice(0, 2).join(', ');
+    $('#np-time-total').textContent = 'LIVE';
+    $('#np-time-current').textContent = '';
+    $('#np-progress-track').classList.add('opacity-30', 'pointer-events-none');
+    $('#np-live-badge').classList.remove('hidden'); $('#np-live-badge').classList.add('flex');
+    $('#np-lyrics-card').classList.add('hidden');
+    if (item.favicon) { art.src = item.favicon; art.classList.remove('hidden'); fallback.classList.add('hidden'); art.onerror = () => { art.classList.add('hidden'); fallback.classList.remove('hidden'); }; art.onload = () => extractDominantColor(art); }
+    else { art.classList.add('hidden'); fallback.classList.remove('hidden'); fallback.className = 'fa-solid fa-tower-broadcast text-white/50 text-6xl'; }
+    $('#np-like-btn').innerHTML = `<i class="fa-${isStationSaved(item.stationuuid) ? 'solid' : 'regular'} fa-heart"></i>`;
+  } else {
+    $('#np-source-label').textContent = 'Playing from Library';
+    $('#np-source-name').textContent = 'Your Music';
+    $('#np-title').textContent = item.name;
+    $('#np-subtitle').textContent = (item.artist || 'Unknown Artist') + (item.album ? ' · ' + item.album : '');
+    $('#np-progress-track').classList.remove('opacity-30', 'pointer-events-none');
+    $('#np-live-badge').classList.add('hidden'); $('#np-live-badge').classList.remove('flex');
+    $('#np-time-total').textContent = item.duration ? fmtTime(item.duration) : fmtTime(audioEl.duration);
+    const src = trackArtSrc(item);
+    if (src) { art.src = src; art.classList.remove('hidden'); fallback.classList.add('hidden'); art.onerror = () => { art.classList.add('hidden'); fallback.classList.remove('hidden'); }; art.onload = () => extractDominantColor(art); }
+    else { art.classList.add('hidden'); fallback.classList.remove('hidden'); fallback.className = 'fa-solid fa-compact-disc text-white/50 text-6xl spin-slow'; }
+    $('#np-like-btn').innerHTML = `<i class="fa-${State.likedTracks.includes(item.id) ? 'solid' : 'regular'} fa-heart"></i>`;
+  }
+  if (visualizerActive) setVisualizerVisible(true); // keep the visualizer showing across track changes
+  renderQueueSheet();
+}
+
+function renderQueueSheet() {
+  const list = $('#queue-list');
+  list.innerHTML = '';
+  if (!Player.queue.length) { list.innerHTML = '<p class="text-textSecondary text-sm text-center py-8">Queue is empty</p>'; return; }
+  Player.queue.forEach((item, i) => {
+    const isRadio = Player.mode === 'radio';
+    const name = isRadio ? item.name : item.name;
+    const sub = isRadio ? (item.tags || 'Radio').split(',')[0] : (item.artist || 'Local File');
+    const rowArt = isRadio ? item.favicon : trackArtSrc(item);
+    const row = el('div', `flex items-center gap-4 ${i === Player.index ? 'opacity-100' : 'opacity-70'} cursor-pointer`);
+    row.innerHTML = `
+      <span class="w-5 text-textSecondary text-xs flex-shrink-0">${i === Player.index ? '<i class="fa-solid fa-volume-high adaptive-text"></i>' : (i + 1)}</span>
+      <div class="w-11 h-11 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+        ${rowArt ? `<img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : `<i class="fa-solid ${isRadio ? 'fa-tower-broadcast' : 'fa-music'} text-white/60 text-sm relative z-10"></i>`}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm truncate ${i === Player.index ? 'adaptive-text' : ''}">${escapeHtml(name)}</p>
+        <p class="text-textSecondary text-xs truncate">${escapeHtml(sub)}</p>
+      </div>`;
+    row.addEventListener('click', () => {
+      Player.index = i;
+      resumeFromIndex();
+      closeAllSheets();
+    });
+    list.appendChild(row);
+  });
+}
+
+/* =====================================================================
+   VIEW: EXPLORE / HOME
+   ===================================================================== */
+async function loadExplore() {
+  const hour = new Date().getHours();
+  $('#greeting').textContent = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Listen Now';
+  try {
+    const stations = await RadioAPI.topStations(15);
+    renderHero(stations[0]);
+    renderQuickPicks(stations.slice(1, 5));
+    renderLiveRadioPreview(stations[0]);
+  } catch (e) {
+    $('#hero-card').outerHTML = emptyStateHtml('hero-card', 'fa-triangle-exclamation', 'Radio unavailable', 'Could not reach the radio directory right now.');
+    $('#quick-picks-grid').innerHTML = '';
+    $('#live-radio-preview').innerHTML = '';
+  }
+  try {
+    const videos = await YouTubeAPI.trending(4);
+    renderTrendingVideos(videos);
+  } catch (e) {
+    renderTrendingVideos(FALLBACK_VIDEOS.slice(0, 4));
+  }
+}
+
+function emptyStateHtml(id, icon, title, sub) {
+  return `<div id="${id}" class="glass-card rounded-3xl p-8 flex flex-col items-center justify-center text-center min-h-[128px]">
+    <i class="fa-solid ${icon} text-2xl text-white/30 mb-3"></i>
+    <h3 class="font-bold text-sm mb-1">${title}</h3>
+    <p class="text-[11px] text-textSecondary max-w-[220px]">${sub}</p>
+  </div>`;
+}
+
+function renderHero(station) {
+  const card = $('#hero-card');
+  card.classList.remove('skeleton');
+  if (!station) { card.innerHTML = ''; return; }
+  card.innerHTML = `
+    <img class="absolute inset-0 w-full h-full object-cover" src="${station.favicon || ''}" onerror="this.style.display='none'" alt="" />
+    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10"></div>
+    <div class="relative z-10 p-6 w-full">
+      <span class="text-[10px] font-bold uppercase tracking-widest text-accentRed mb-2 block bg-black/40 backdrop-blur-md w-fit px-2 py-0.5 rounded">Top Voted Live</span>
+      <h2 class="text-2xl font-bold mb-1 tracking-tight truncate">${escapeHtml(station.name)}</h2>
+      <p class="text-textSecondary text-sm mb-6 leading-relaxed line-clamp-2">${escapeHtml((station.tags || 'Live radio').split(',').slice(0, 3).join(' · '))}</p>
+      <div class="flex items-center gap-3">
+        <button class="hero-play flex-1 bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-2"><i class="fa-solid fa-play"></i> Listen</button>
+        <button class="hero-save w-12 h-12 glass flex items-center justify-center rounded-xl text-white"><i class="fa-${isStationSaved(station.stationuuid) ? 'solid' : 'regular'} fa-heart"></i></button>
+      </div>
+    </div>`;
+  card.querySelector('.hero-play').addEventListener('click', () => playRadioStation(station, [station]));
+  card.querySelector('.hero-save').addEventListener('click', (e) => { const saved = toggleSavedStation(station); e.currentTarget.innerHTML = `<i class="fa-${saved ? 'solid' : 'regular'} fa-heart"></i>`; toast(saved ? 'Saved to Library' : 'Removed from Library'); });
+}
+
+function renderQuickPicks(stations) {
+  const grid = $('#quick-picks-grid');
+  grid.innerHTML = '';
+  if (!stations.length) { grid.innerHTML = '<p class="col-span-2 text-textSecondary text-sm">Nothing to show yet.</p>'; return; }
+  stations.forEach(st => {
+    const card = el('button', 'glass-card p-3 rounded-2xl group active:scale-95 transition-transform text-left');
+    card.innerHTML = `
+      <div class="aspect-square rounded-xl overflow-hidden mb-3 bg-white/5 flex items-center justify-center">
+        ${st.favicon ? `<img class="w-full h-full object-cover" src="${st.favicon}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-tower-broadcast text-2xl text-white/30'}))" />` : `<i class="fa-solid fa-tower-broadcast text-2xl text-white/30"></i>`}
+      </div>
+      <h3 class="font-bold text-sm truncate">${escapeHtml(st.name)}</h3>
+      <p class="text-textSecondary text-[11px] truncate">${escapeHtml((st.tags || 'Radio').split(',')[0])}</p>`;
+    card.addEventListener('click', () => playRadioStation(st, stations));
+    grid.appendChild(card);
+  });
+}
+
+function renderLiveRadioPreview(station) {
+  const box = $('#live-radio-preview');
+  box.classList.remove('skeleton');
+  if (!station) { box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <div class="relative z-10 flex flex-col justify-between h-32">
+      <div>
+        <span class="bg-accentRed px-2 py-0.5 rounded text-[10px] font-bold uppercase mb-2 inline-block">Live</span>
+        <h3 class="text-2xl font-black italic tracking-tighter truncate">${escapeHtml(station.name.toUpperCase())}</h3>
+      </div>
+      <div class="flex items-center justify-between">
+        <p class="text-xs font-medium text-white/80 truncate">${escapeHtml((station.tags || 'Live radio').split(',')[0])}</p>
+        <button class="live-preview-play w-10 h-10 rounded-full bg-white text-black flex items-center justify-center text-lg shadow-xl flex-shrink-0"><i class="fa-solid fa-play ml-0.5"></i></button>
+      </div>
+    </div>
+    ${station.favicon ? `<img class="absolute inset-0 w-full h-full object-cover opacity-20" src="${station.favicon}" onerror="this.remove()" />` : ''}`;
+  box.querySelector('.live-preview-play').addEventListener('click', () => playRadioStation(station, [station]));
+}
+
+function renderTrendingVideos(videos) {
+  const heroList = $('#trending-video-list');
+  heroList.innerHTML = '';
+  videos.forEach(v => heroList.appendChild(videoRow(v, videos)));
+}
+
+function videoRow(v, listContext) {
+  const row = el('button', 'flex gap-4 glass-card p-3 rounded-2xl items-center w-full text-left');
+  row.innerHTML = `
+    <div class="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 relative bg-white/5">
+      <img class="w-full h-full object-cover" src="${v.thumb}" alt="" />
+      <div class="absolute inset-0 bg-black/20 flex items-center justify-center"><i class="fa-solid fa-play text-xs"></i></div>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h4 class="text-sm font-bold truncate">${escapeHtml(v.title)}</h4>
+      <p class="text-xs text-textSecondary truncate">${escapeHtml(v.channel)}${v.views ? ' · ' + v.views : ''}</p>
+    </div>`;
+  row.addEventListener('click', () => playVideo(v, listContext));
+  return row;
+}
+
+/* =====================================================================
+   VIEW: VIDEO / YOUTUBE
+   ===================================================================== */
+let currentVideoQuery = 'trending music';
+async function loadVideoView(query) {
+  $('#yt-key-warning').classList.toggle('hidden', YouTubeAPI.hasKey());
+  const listEl = $('#video-list');
+  listEl.innerHTML = '<div class="skeleton h-20 rounded-xl"></div><div class="skeleton h-20 rounded-xl"></div>';
+  try {
+    const videos = query && query !== 'trending music' ? await YouTubeAPI.search(query, 12) : await YouTubeAPI.trending(12);
+    $('#video-list-heading').textContent = query && query !== 'trending music' ? `Results for "${query}"` : 'Trending Now';
+    listEl.innerHTML = '';
+    videos.forEach(v => listEl.appendChild(videoListItem(v, videos)));
+  } catch (e) {
+    listEl.innerHTML = '';
+    FALLBACK_VIDEOS.forEach(v => listEl.appendChild(videoListItem(v, FALLBACK_VIDEOS)));
+  }
+}
+function videoListItem(v, listContext) {
+  const row = el('button', 'flex gap-4 group active:scale-[0.98] transition-transform w-full text-left');
+  row.innerHTML = `
+    <div class="w-32 h-20 rounded-xl overflow-hidden flex-shrink-0 relative glass-card">
+      <img class="w-full h-full object-cover" src="${v.thumb}" alt="" />
+    </div>
+    <div class="flex flex-col justify-center min-w-0">
+      <h4 class="text-sm font-bold truncate">${escapeHtml(v.title)}</h4>
+      <p class="text-[11px] text-textSecondary truncate">${escapeHtml(v.channel)}</p>
+      ${v.views ? `<p class="text-[10px] text-textSecondary mt-1">${v.views}</p>` : ''}
+    </div>`;
+  row.addEventListener('click', () => playVideo(v, listContext));
+  return row;
+}
+
+let currentVideo = null; // tracks the currently playing YouTube video, for "Add to Playlist"
+async function playVideo(video, listContext) {
+  currentVideo = video;
+  // pause audio player when switching to video
+  audioEl.pause();
+  if ('mediaSession' in navigator) { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } // YouTube plays in its own iframe — don't leave stale lock-screen controls for paused audio
+  switchView('video');
+  $('#yt-placeholder').classList.add('hidden');
+  $('#yt-player-wrap').classList.remove('hidden');
+  $('#yt-now-info').classList.remove('hidden');
+  $('#yt-now-title').textContent = video.title;
+  $('#yt-now-channel').textContent = video.channel;
+
+  const YT = await loadYouTubeIframeAPI();
+  if (ytPlayer) {
+    ytPlayer.loadVideoById(video.id);
+  } else {
+    const wrap = $('#yt-player-wrap');
+    wrap.innerHTML = '<div id="yt-target"></div>';
+    ytPlayer = new YT.Player('yt-target', {
+      videoId: video.id,
+      playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+      events: {
+        onReady: (e) => e.target.playVideo(),
+        onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) playNextVideoInList(video, listContext); }
+      }
+    });
+  }
+}
+function playNextVideoInList(current, listContext) {
+  if (!listContext || !listContext.length) return;
+  const idx = listContext.findIndex(v => v.id === current.id);
+  const next = listContext[(idx + 1) % listContext.length];
+  if (next) playVideo(next, listContext);
+}
+
+/* =====================================================================
+   EXPLORE — Artist discovery: biography, popular songs, similar artists.
+   Biography/photo come from TheAudioDB's public test endpoint (key
+   "123", the current free test key TheAudioDB publishes for exactly
+   this kind of non-commercial testing/use — no signup needed, capped
+   at 30 requests/min). Song and similar-artist data comes from the
+   iTunes Search API, already used elsewhere in the app for artwork.
+   Playing a song here always resolves it on YouTube and plays it in
+   the Video view, per how this section is meant to work.
+   ===================================================================== */
+const AUDIODB_KEY = '123'; // TheAudioDB's official public test key (see theaudiodb.com/free_music_api)
+const ArtistDiscoverAPI = (() => {
+  async function bio(name) {
+    try {
+      const res = await fetch(`https://www.theaudiodb.com/api/v1/json/${AUDIODB_KEY}/search.php?s=${encodeURIComponent(name)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.artists && data.artists[0]) || null;
+    } catch (e) { return null; }
+  }
+  async function iTunesArtist(name) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&media=music&entity=musicArtist&limit=1`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.results && data.results[0]) || null;
+    } catch (e) { return null; }
+  }
+  async function songsByArtist(artistId, name, limit = 12) {
+    // Prefer a direct lookup by the artist's real iTunes ID — far more
+    // reliable than text search, since it can't mismatch on spelling/attribute.
+    if (artistId) {
+      try {
+        const res = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=song&limit=${limit + 5}`);
+        if (res.ok) {
+          const data = await res.json();
+          const tracks = (data.results || []).filter(r => r.wrapperType === 'track' && r.kind === 'song');
+          if (tracks.length) return tracks.slice(0, limit);
+        }
+      } catch (e) { /* fall through to text search below */ }
+    }
+    // Fallback: broad term search (no attribute restriction — that was too strict and often returned nothing)
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&media=music&entity=song&limit=${limit}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.results || []).filter(r => r.wrapperType === 'track' && r.kind === 'song');
+    } catch (e) { return []; }
+  }
+  async function artistsByGenre(genre, limit = 10) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(genre)}&media=music&entity=musicArtist&limit=${limit}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.results || [];
+    } catch (e) { return []; }
+  }
+  return { bio, iTunesArtist, songsByArtist, artistsByGenre };
+})();
+
+let discoverSearchToken = 0;
+async function runArtistDiscovery(rawName) {
+  const name = rawName.trim();
+  if (!name) return;
+  const myToken = ++discoverSearchToken; // guards against out-of-order responses from rapid re-searches
+  $('#discover-empty').classList.add('hidden');
+  $('#discover-results').classList.add('hidden');
+  $('#discover-loading').classList.remove('hidden');
+
+  const [audioDbArtist, itunesArtist] = await Promise.all([
+    ArtistDiscoverAPI.bio(name),
+    ArtistDiscoverAPI.iTunesArtist(name),
+  ]);
+  if (myToken !== discoverSearchToken) return; // a newer search superseded this one
+
+  if (!audioDbArtist && !itunesArtist) {
+    $('#discover-loading').classList.add('hidden');
+    $('#discover-empty').classList.remove('hidden');
+    $('#discover-empty').innerHTML = `
+      <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20 text-3xl mb-4"><i class="fa-solid fa-user-slash"></i></div>
+      <h3 class="font-bold text-sm mb-1">No artist found</h3>
+      <p class="text-[11px] text-textSecondary max-w-[220px]">Try checking the spelling or searching a different artist.</p>`;
+    return;
+  }
+
+  const displayName = audioDbArtist?.strArtist || itunesArtist?.artistName || name;
+  const genre = itunesArtist?.primaryGenreName || audioDbArtist?.strGenre || '';
+  const photo = audioDbArtist?.strArtistThumb || audioDbArtist?.strArtistFanart || null;
+
+  const [songs, similarRaw] = await Promise.all([
+    ArtistDiscoverAPI.songsByArtist(itunesArtist?.artistId, displayName, 10),
+    genre ? ArtistDiscoverAPI.artistsByGenre(genre, 12) : Promise.resolve([]),
+  ]);
+  if (myToken !== discoverSearchToken) return;
+
+  const similar = similarRaw
+    .filter(a => a.artistName && a.artistName.toLowerCase() !== displayName.toLowerCase())
+    .filter((a, i, arr) => arr.findIndex(x => x.artistName === a.artistName) === i)
+    .slice(0, 8);
+
+  // Give each similar artist a representative image (a cover from one of their songs)
+  const similarWithArt = await Promise.all(similar.map(async (a) => {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(a.artistName)}&media=music&entity=song&limit=1`);
+      const data = res.ok ? await res.json() : null;
+      const art = data?.results?.[0]?.artworkUrl100?.replace('100x100', '300x300') || null;
+      return { name: a.artistName, art };
+    } catch (e) { return { name: a.artistName, art: null }; }
+  }));
+  if (myToken !== discoverSearchToken) return;
+
+  $('#discover-loading').classList.add('hidden');
+  $('#discover-results').classList.remove('hidden');
+  renderArtistHeader(displayName, audioDbArtist, genre, photo);
+  renderArtistBio(audioDbArtist);
+  renderArtistSongs(songs, displayName);
+  renderSimilarArtists(similarWithArt);
+  $('#app-scroll').scrollTop = 0;
+}
+
+function renderArtistHeader(name, audioDbArtist, genre, photo) {
+  const box = $('#discover-artist-header');
+  const formed = audioDbArtist?.intFormedYear;
+  const tags = [genre, audioDbArtist?.strStyle, audioDbArtist?.strMood].filter(Boolean).slice(0, 3);
+  box.innerHTML = `
+    ${photo ? `<img class="absolute inset-0 w-full h-full object-cover" src="${photo}" onerror="this.remove()" alt="" />` : ''}
+    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10"></div>
+    <div class="relative z-10 p-6 w-full">
+      <h2 class="text-3xl font-extrabold mb-2 tracking-tight truncate">${escapeHtml(name)}</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        ${formed ? `<span class="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-white/80">Since ${escapeHtml(String(formed))}</span>` : ''}
+        ${tags.map(t => `<span class="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-white/80 capitalize">${escapeHtml(t)}</span>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderArtistBio(audioDbArtist) {
+  const wrap = $('#discover-bio-wrap');
+  const bioText = audioDbArtist?.strBiography;
+  if (!bioText) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const p = $('#discover-bio-text');
+  const toggle = $('#discover-bio-toggle');
+  p.textContent = bioText;
+  p.classList.add('line-clamp-4');
+  toggle.textContent = 'Read more';
+  toggle.classList.toggle('hidden', bioText.length < 280);
+  toggle.onclick = () => {
+    const collapsed = p.classList.toggle('line-clamp-4');
+    toggle.textContent = collapsed ? 'Read more' : 'Show less';
+  };
+}
+
+function renderArtistSongs(songs, artistName) {
+  const list = $('#discover-songs-list');
+  list.innerHTML = '';
+  if (!songs.length) { list.appendChild(el('div', '', emptyStateHtml('x', 'fa-music', 'No songs found', 'Try a more specific artist name.'))); return; }
+  songs.forEach(s => {
+    const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+    const art = s.artworkUrl100 ? s.artworkUrl100.replace('100x100', '160x160') : null;
+    row.innerHTML = `
+      <div class="w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center flex-shrink-0">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-music text-white/30'}))" />` : `<i class="fa-solid fa-music text-white/30"></i>`}
+      </div>
+      <div class="flex-1 min-w-0">
+        <h4 class="text-sm font-bold truncate">${escapeHtml(s.trackName || 'Untitled')}</h4>
+        <p class="text-[11px] text-textSecondary truncate">${escapeHtml(s.collectionName || artistName)}</p>
+      </div>
+      <span class="discover-play-icon w-9 h-9 rounded-full bg-white text-black flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-play ml-0.5 text-xs"></i></span>`;
+    row.addEventListener('click', () => playArtistSongOnYouTube(row, artistName, s.trackName));
+    list.appendChild(row);
+  });
+}
+
+function renderSimilarArtists(similar) {
+  const wrap = $('#discover-similar-wrap');
+  const list = $('#discover-similar-list');
+  list.innerHTML = '';
+  if (!similar.length) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  similar.forEach(a => {
+    const card = el('button', 'flex-shrink-0 w-28 text-center');
+    card.innerHTML = `
+      <div class="w-24 h-24 rounded-full overflow-hidden bg-white/5 flex items-center justify-center mb-2 mx-auto">
+        ${a.art ? `<img class="w-full h-full object-cover" src="${a.art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-user text-2xl text-white/30'}))" />` : `<i class="fa-solid fa-user text-2xl text-white/30"></i>`}
+      </div>
+      <p class="text-xs font-bold truncate">${escapeHtml(a.name)}</p>`;
+    card.addEventListener('click', () => { $('#discover-search-input').value = a.name; runArtistDiscovery(a.name); });
+    list.appendChild(card);
+  });
+}
+
+/* Tapping a song in Explore resolves it on YouTube and plays it there. */
+async function playArtistSongOnYouTube(rowEl, artistName, trackName) {
+  const iconWrap = rowEl.querySelector('.discover-play-icon');
+  const original = iconWrap.innerHTML;
+  iconWrap.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i>';
+  try {
+    const results = await YouTubeAPI.search(`${artistName} ${trackName}`, 1);
+    if (!results.length) { toast('Could not find this song on YouTube'); iconWrap.innerHTML = original; return; }
+    const video = { ...results[0], title: results[0].title || `${trackName} - ${artistName}` };
+    await playVideo(video, [video]);
+  } catch (e) {
+    toast('Could not play this song');
+    iconWrap.innerHTML = original;
+  }
+}
+
+/* Search wiring */
+let discoverDebounce = null;
+$('#discover-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { clearTimeout(discoverDebounce); runArtistDiscovery(e.target.value); }
+});
+$('#discover-search-input').addEventListener('input', (e) => {
+  clearTimeout(discoverDebounce);
+  const q = e.target.value.trim();
+  if (!q) return;
+  discoverDebounce = setTimeout(() => runArtistDiscovery(q), 700);
+});
+
+/* =====================================================================
+   VIEW: RADIO
+   ===================================================================== */
+async function loadRadioView() {
+  loadLocalRadio(); // fire-and-forget, has its own error handling
+  try {
+    const stations = await RadioAPI.topStations(1);
+    renderRadioFeatured(stations[0]);
+  } catch (e) { $('#radio-featured').outerHTML = emptyStateHtml('radio-featured', 'fa-triangle-exclamation', 'Radio unavailable', 'Could not reach the radio directory.'); }
+  try {
+    const tags = await RadioAPI.topTags(10);
+    renderRadioGenres(tags);
+  } catch (e) { $('#radio-genres').innerHTML = ''; }
+  try {
+    const stations = await RadioAPI.topStations(20);
+    renderRadioTopList(stations);
+  } catch (e) { $('#radio-top-list').innerHTML = emptyStateHtml('x', 'fa-triangle-exclamation', 'No stations found', 'Try again in a moment.'); }
+  renderRadioRecent();
+}
+
+/* ---- Local Radio: auto-detected (or user-chosen) country ---- */
+async function detectLocalCountry() {
+  if (State.localCountry) return State.localCountry; // respect an existing manual choice
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    if (!res.ok) throw new Error('geo lookup failed');
+    const data = await res.json();
+    if (data.country_code && data.country_name) {
+      State.localCountry = { code: data.country_code, name: data.country_name };
+      persistLocalCountry();
+      return State.localCountry;
+    }
+    throw new Error('no country in response');
+  } catch (e) {
+    // Fall back to South Africa rather than showing nothing
+    State.localCountry = { code: 'ZA', name: 'South Africa' };
+    persistLocalCountry();
+    return State.localCountry;
+  }
+}
+async function loadLocalRadio() {
+  const country = await detectLocalCountry();
+  $('#local-radio-heading').textContent = `Local Radio · ${country.name}`;
+  const list = $('#radio-local-list');
+  list.innerHTML = '<div class="skeleton h-16 rounded-2xl"></div><div class="skeleton h-16 rounded-2xl"></div>';
+  try {
+    const stations = await RadioAPI.byCountryCode(country.code, 15);
+    if (!stations.length) { list.innerHTML = ''; list.appendChild(el('div', '', emptyStateHtml('x', 'fa-location-dot', `No stations found for ${country.name}`, 'Try choosing a different country.'))); return; }
+    list.innerHTML = '';
+    stations.forEach(st => {
+      const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+      row.innerHTML = `
+        <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          ${st.favicon ? `<img class="w-full h-full object-cover" src="${st.favicon}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-tower-broadcast text-white/30'}))" />` : `<i class="fa-solid fa-tower-broadcast text-white/30"></i>`}
+        </div>
+        <div class="flex-1 min-w-0">
+          <h4 class="text-sm font-bold truncate">${escapeHtml(st.name)}</h4>
+          <p class="text-[11px] text-textSecondary truncate">${escapeHtml((st.tags || 'Radio').split(',')[0])} ${st.state ? '· ' + escapeHtml(st.state) : ''}</p>
+        </div>
+        <span class="text-white/70"><i class="fa-solid fa-play"></i></span>`;
+      row.addEventListener('click', () => playRadioStation(st, stations));
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = '';
+    list.appendChild(el('div', '', emptyStateHtml('x', 'fa-triangle-exclamation', 'Local radio unavailable', 'Could not reach the radio directory right now.')));
+  }
+}
+
+/* Country picker sheet */
+let countryListCache = null;
+$('#local-radio-change').addEventListener('click', async () => {
+  openSheet('#country-sheet');
+  $('#country-search').value = '';
+  const listEl = $('#country-list');
+  listEl.innerHTML = '<div class="skeleton h-10 rounded-xl mb-2"></div><div class="skeleton h-10 rounded-xl mb-2"></div>';
+  if (!countryListCache) {
+    try { countryListCache = (await RadioAPI.countries()).filter(c => c.name && c.iso_3166_1); }
+    catch (e) { countryListCache = []; listEl.innerHTML = emptyStateHtml('x', 'fa-triangle-exclamation', 'Could not load countries', 'Check your connection and try again.'); return; }
+  }
+  renderCountryList(countryListCache);
+  $('#country-search').focus();
+});
+function renderCountryList(countries) {
+  const listEl = $('#country-list');
+  listEl.innerHTML = '';
+  if (!countries.length) { listEl.innerHTML = emptyStateHtml('x', 'fa-magnifying-glass', 'No matches', 'Try a different search.'); return; }
+  countries.slice(0, 200).forEach(c => {
+    const row = el('button', 'w-full flex items-center justify-between py-3 px-2 text-left rounded-xl hover:bg-white/5');
+    const active = State.localCountry && State.localCountry.code === c.iso_3166_1;
+    row.innerHTML = `<span class="text-sm font-medium ${active ? 'text-accentRed font-bold' : ''}">${escapeHtml(c.name)}</span><span class="text-textSecondary text-xs">${c.stationcount || ''}${active ? ' <i class=\"fa-solid fa-check ml-2\"></i>' : ''}</span>`;
+    row.addEventListener('click', () => {
+      State.localCountry = { code: c.iso_3166_1, name: c.name };
+      persistLocalCountry();
+      closeAllSheets();
+      loadLocalRadio();
+      toast(`Local radio set to ${c.name}`);
+    });
+    listEl.appendChild(row);
+  });
+}
+$('#country-search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!countryListCache) return;
+  renderCountryList(q ? countryListCache.filter(c => c.name.toLowerCase().includes(q)) : countryListCache);
+});
+function renderRadioFeatured(station) {
+  const box = $('#radio-featured');
+  box.classList.remove('skeleton');
+  if (!station) { box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <img class="w-full h-48 object-cover" src="${station.favicon || ''}" onerror="this.style.display='none'" alt="" />
+    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+    <div class="p-6 ${station.favicon ? 'absolute bottom-0 left-0 right-0' : ''}">
+      <div class="flex items-center justify-between mb-2">
+        <span class="bg-accentRed px-2 py-0.5 rounded text-[10px] font-bold uppercase">Live</span>
+        <p class="text-xs font-medium text-white/60">${escapeHtml(station.country || 'Worldwide')}</p>
+      </div>
+      <h3 class="text-2xl font-black italic tracking-tighter uppercase mb-4 truncate">${escapeHtml(station.name)}</h3>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-full glass flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-tower-broadcast text-accentRed"></i></div>
+          <div class="min-w-0">
+            <p class="text-sm font-bold truncate">${escapeHtml((station.tags || 'Radio').split(',')[0])}</p>
+            <p class="text-[11px] text-textSecondary">${station.votes || 0} votes</p>
+          </div>
+        </div>
+        <button class="radio-feat-play w-12 h-12 rounded-full bg-white text-black flex items-center justify-center text-xl shadow-xl flex-shrink-0"><i class="fa-solid fa-play ml-0.5"></i></button>
+      </div>
+    </div>`;
+  box.querySelector('.radio-feat-play').addEventListener('click', () => playRadioStation(station, [station]));
+}
+
+function renderRadioGenres(tags) {
+  const wrap = $('#radio-genres');
+  wrap.innerHTML = '';
+  tags.filter(t => t.name && t.name.length < 18).slice(0, 10).forEach(t => {
+    const card = el('button', 'flex-shrink-0 w-28 glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-3');
+    card.innerHTML = `<div class="w-12 h-12 rounded-full bg-accentRed/20 flex items-center justify-center text-accentRed text-xl"><i class="fa-solid ${genreIcon(t.name)}"></i></div><span class="text-xs font-bold capitalize truncate max-w-full">${escapeHtml(t.name)}</span>`;
+    card.addEventListener('click', async () => {
+      $('#radio-top-list').innerHTML = '<div class="skeleton h-16 rounded-2xl"></div>';
+      try { const stations = await RadioAPI.byTag(t.name, 20); renderRadioTopList(stations, t.name); } catch (e) { toast('Could not load genre'); }
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function renderRadioTopList(stations, heading) {
+  const list = $('#radio-top-list');
+  list.innerHTML = '';
+  if (!stations || !stations.length) { list.innerHTML = emptyStateHtml('x', 'fa-satellite-dish', 'No stations found', 'Try another genre or search.'); return; }
+  stations.forEach(st => {
+    const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+    row.innerHTML = `
+      <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+        ${st.favicon ? `<img class="w-full h-full object-cover" src="${st.favicon}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-tower-broadcast text-white/30'}))" />` : `<i class="fa-solid fa-tower-broadcast text-white/30"></i>`}
+      </div>
+      <div class="flex-1 min-w-0">
+        <h4 class="text-sm font-bold truncate">${escapeHtml(st.name)}</h4>
+        <p class="text-[11px] text-textSecondary truncate">${escapeHtml(st.country || '')} ${st.bitrate ? '· ' + st.bitrate + 'kbps' : ''}</p>
+      </div>
+      <span class="text-white/70"><i class="fa-solid fa-play"></i></span>`;
+    row.addEventListener('click', () => playRadioStation(st, stations));
+    list.appendChild(row);
+  });
+}
+
+function renderRadioRecent() {
+  const box = $('#radio-recent');
+  if (!State.recentStations.length) return;
+  box.innerHTML = '';
+  const listWrap = el('div', 'space-y-3 w-full');
+  State.recentStations.forEach(st => {
+    const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+    row.innerHTML = `
+      <div class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+        ${st.favicon ? `<img class="w-full h-full object-cover" src="${st.favicon}" onerror="this.remove()" />` : `<i class="fa-solid fa-tower-broadcast text-white/30 text-sm"></i>`}
+      </div>
+      <div class="flex-1 min-w-0"><h4 class="text-sm font-bold truncate">${escapeHtml(st.name)}</h4></div>
+      <i class="fa-solid fa-play text-white/70 text-xs"></i>`;
+    row.addEventListener('click', () => playRadioStation(st, State.recentStations));
+    listWrap.appendChild(row);
+  });
+  box.className = 'space-y-3';
+  box.appendChild(listWrap);
+}
+
+/* =====================================================================
+   VIEW: LIBRARY
+   ===================================================================== */
+/* Only the tab actually on screen gets rendered right after a library reload;
+   the rest are marked stale and rendered on-demand the moment their tab is
+   opened. Rendering all six views of a large library at once was the main
+   cause of the freeze/crash — this bounds the work to what's actually visible. */
+const LIBRARY_RENDERERS = {
+  songs: renderLibrarySongs,
+  playlists: renderLibraryPlaylists,
+  artists: renderLibraryArtists,
+  albums: renderLibraryAlbums,
+  liked: renderLibraryLiked,
+  stations: renderLibraryStations,
+};
+let libraryStaleTabs = new Set(Object.keys(LIBRARY_RENDERERS));
+function ensureLibraryTabRendered(tab) {
+  if (!LIBRARY_RENDERERS[tab] || !libraryStaleTabs.has(tab)) return;
+  LIBRARY_RENDERERS[tab]();
+  libraryStaleTabs.delete(tab);
+}
+function showLibraryLoadingSkeleton() {
+  $('#library-songs-list').innerHTML = `
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>
+    <div class="skeleton h-16 rounded-2xl"></div>`;
+}
+
+async function loadLibraryView() {
+  const activeTab = $('.lib-tab.bg-white')?.dataset.tab || 'songs';
+  if (activeTab === 'songs') showLibraryLoadingSkeleton(); // library reloads can take a moment for big collections — never leave it blank
+  await refreshLibraryCache();
+  libraryStaleTabs = new Set(Object.keys(LIBRARY_RENDERERS)); // fresh data — every tab needs a re-render next time it's opened
+  ensureLibraryTabRendered(activeTab);
+}
+
+const SONGS_PAGE_SIZE = 60;
+let songsRenderedCount = 0;
+function renderLibrarySongs() {
+  const list = $('#library-songs-list');
+  list.innerHTML = '';
+  songsRenderedCount = 0;
+  if (!libraryCache.length) { list.appendChild(el('div', '', emptyStateHtml('x', 'fa-music', 'No songs yet', 'Add audio files from this device to build your library.'))); return; }
+  renderMoreSongs();
+}
+function renderMoreSongs() {
+  const list = $('#library-songs-list');
+  document.getElementById('library-songs-load-more')?.remove();
+  const nextBatch = libraryCache.slice(songsRenderedCount, songsRenderedCount + SONGS_PAGE_SIZE);
+  const frag = document.createDocumentFragment();
+  nextBatch.forEach(track => frag.appendChild(libraryTrackRow(track, libraryCache)));
+  list.appendChild(frag);
+  songsRenderedCount += nextBatch.length;
+  const remaining = libraryCache.length - songsRenderedCount;
+  if (remaining > 0) {
+    const btn = el('button', 'w-full glass-card rounded-2xl py-3 text-sm font-bold text-textSecondary hover:text-white transition-colors', `Show ${Math.min(SONGS_PAGE_SIZE, remaining)} more (${remaining} left)`);
+    btn.id = 'library-songs-load-more';
+    btn.addEventListener('click', renderMoreSongs);
+    list.appendChild(btn);
+  }
+}
+function trackArtSrc(track) { return track.artDataUrl || track.artUrl || null; }
+function libraryTrackRow(track, listContext) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+  const art = trackArtSrc(track);
+  row.innerHTML = `
+    <button class="track-play w-12 h-12 rounded-xl bg-gradient-to-br from-accentRed/60 to-purple-700/60 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+      ${art ? `<img src="${art}" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : ''}
+      <i class="fa-solid fa-play text-white relative z-10 ${art ? 'drop-shadow' : ''}"></i>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h3 class="font-bold text-sm truncate">${escapeHtml(track.name)}</h3>
+      <p class="text-textSecondary text-xs truncate">${escapeHtml(track.artist || 'Unknown Artist')}${track.album ? ' · ' + escapeHtml(track.album) : ''}</p>
+    </div>
+    <span class="text-textSecondary text-[11px] flex-shrink-0 tabular-nums hidden lg:inline">${track.duration ? fmtTime(track.duration) : ''}</span>
+    <button class="track-add-playlist text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Add to playlist"><i class="fa-solid fa-list-ul"></i></button>
+    <button class="track-edit text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Edit info"><i class="fa-solid fa-pen"></i></button>
+    <button class="track-like text-lg flex-shrink-0"><i class="fa-${State.likedTracks.includes(track.id) ? 'solid' : 'regular'} fa-heart"></i></button>
+    <button class="track-remove text-textSecondary text-sm flex-shrink-0 px-1"><i class="fa-solid fa-trash"></i></button>`;
+  row.querySelector('.track-play').addEventListener('click', () => playLibraryTrack(track.id, listContext));
+  row.querySelector('.track-add-playlist').addEventListener('click', (e) => { e.stopPropagation(); openAddToPlaylistSheet({ type: 'library', trackId: track.id }); });
+  row.querySelector('.track-edit').addEventListener('click', (e) => { e.stopPropagation(); openEditTrackSheet(track); });
+  row.querySelector('.track-like').addEventListener('click', (e) => {
+    if (State.likedTracks.includes(track.id)) State.likedTracks = State.likedTracks.filter(id => id !== track.id);
+    else State.likedTracks.push(track.id);
+    persistLikes();
+    e.currentTarget.innerHTML = `<i class="fa-${State.likedTracks.includes(track.id) ? 'solid' : 'regular'} fa-heart"></i>`;
+    renderLibraryLiked();
+  });
+  row.querySelector('.track-remove').addEventListener('click', async () => {
+    if (!confirm(`Remove "${track.name}" from your library?`)) return;
+    await LibraryDB.remove(track.id);
+    State.likedTracks = State.likedTracks.filter(id => id !== track.id);
+    persistLikes();
+    await loadLibraryView();
+    toast('Removed');
+  });
+  return row;
+}
+function renderLibraryLiked() {
+  const panel = $('#lib-liked-panel');
+  panel.innerHTML = '';
+  const liked = libraryCache.filter(t => State.likedTracks.includes(t.id));
+  if (!liked.length) { panel.appendChild(el('div', '', emptyStateHtml('x', 'fa-heart', 'No liked songs', 'Tap the heart on any track to save it here.'))); return; }
+  liked.forEach(track => panel.appendChild(libraryTrackRow(track, liked)));
+}
+function renderLibraryStations() {
+  const panel = $('#lib-stations-panel');
+  panel.innerHTML = '';
+  if (!State.savedStations.length) { panel.appendChild(el('div', '', emptyStateHtml('x', 'fa-tower-broadcast', 'No saved stations', 'Tap the heart on any radio station to save it here.'))); return; }
+  State.savedStations.forEach(st => {
+    const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+    row.innerHTML = `
+      <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">${st.favicon ? `<img class="w-full h-full object-cover" src="${st.favicon}" onerror="this.remove()" />` : `<i class="fa-solid fa-tower-broadcast text-white/30"></i>`}</div>
+      <div class="flex-1 min-w-0"><h3 class="font-bold text-sm truncate">${escapeHtml(st.name)}</h3><p class="text-textSecondary text-xs truncate">${escapeHtml(st.country || '')}</p></div>
+      <button class="st-play w-9 h-9 rounded-full bg-white text-black flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-play ml-0.5 text-xs"></i></button>`;
+    row.querySelector('.st-play').addEventListener('click', () => playRadioStation(st, State.savedStations));
+    panel.appendChild(row);
+  });
+}
+
+/* ---- Artists & Albums grouping ---- */
+function groupBy(list, keyFn, fallback) {
+  const map = new Map();
+  list.forEach(item => {
+    const key = (keyFn(item) || '').trim() || fallback;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  });
+  return map;
+}
+/* Shared pagination helper for the Artists/Albums card grids — same idea as the
+   songs list: never build more DOM at once than a page's worth. */
+function renderPaginatedGrid(gridEl, items, cardBuilder, pageSize = 40) {
+  gridEl.innerHTML = '';
+  let rendered = 0;
+  function renderBatch() {
+    document.getElementById(gridEl.id + '-load-more')?.remove();
+    const batch = items.slice(rendered, rendered + pageSize);
+    const frag = document.createDocumentFragment();
+    batch.forEach(item => frag.appendChild(cardBuilder(item)));
+    gridEl.appendChild(frag);
+    rendered += batch.length;
+    const remaining = items.length - rendered;
+    if (remaining > 0) {
+      const btn = el('button', 'col-span-full glass-card rounded-2xl py-3 text-sm font-bold text-textSecondary hover:text-white transition-colors', `Show ${Math.min(pageSize, remaining)} more (${remaining} left)`);
+      btn.id = gridEl.id + '-load-more';
+      btn.addEventListener('click', renderBatch);
+      gridEl.appendChild(btn);
+    }
+  }
+  renderBatch();
+}
+function renderLibraryArtists() {
+  const grid = $('#lib-artists-grid');
+  if (!libraryCache.length) { grid.innerHTML = ''; grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('x', 'fa-user', 'No artists yet', 'Add songs to see them grouped by artist.'))); return; }
+  const groups = groupBy(libraryCache, t => t.artist, 'Unknown Artist');
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  renderPaginatedGrid(grid, sorted, ([artist, tracks]) => {
+    const art = trackArtSrc(tracks.find(t => trackArtSrc(t)) || {});
+    const card = el('button', 'glass-card p-3 rounded-2xl text-left');
+    card.innerHTML = `
+      <div class="aspect-square rounded-full overflow-hidden mb-3 bg-white/5 flex items-center justify-center mx-auto w-2/3">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-user text-2xl text-white/30'}))" />` : `<i class="fa-solid fa-user text-2xl text-white/30"></i>`}
+      </div>
+      <h3 class="font-bold text-sm truncate text-center">${escapeHtml(artist)}</h3>
+      <p class="text-textSecondary text-[11px] truncate text-center">${tracks.length} song${tracks.length !== 1 ? 's' : ''}</p>`;
+    card.addEventListener('click', () => showLibraryDetail(artist, tracks, 'fa-user'));
+    return card;
+  });
+}
+function renderLibraryAlbums() {
+  const grid = $('#lib-albums-grid');
+  if (!libraryCache.length) { grid.innerHTML = ''; grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('x', 'fa-record-vinyl', 'No albums yet', 'Add songs to see them grouped by album.'))); return; }
+  const groups = groupBy(libraryCache, t => t.album, 'Unknown Album');
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  renderPaginatedGrid(grid, sorted, ([album, tracks]) => {
+    const art = trackArtSrc(tracks.find(t => trackArtSrc(t)) || {});
+    const card = el('button', 'glass-card p-3 rounded-2xl text-left');
+    card.innerHTML = `
+      <div class="aspect-square rounded-xl overflow-hidden mb-3 bg-white/5 flex items-center justify-center">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-record-vinyl text-2xl text-white/30'}))" />` : `<i class="fa-solid fa-record-vinyl text-2xl text-white/30"></i>`}
+      </div>
+      <h3 class="font-bold text-sm truncate">${escapeHtml(album)}</h3>
+      <p class="text-textSecondary text-[11px] truncate">${escapeHtml(tracks[0].artist || 'Unknown Artist')} · ${tracks.length} song${tracks.length !== 1 ? 's' : ''}</p>`;
+    card.addEventListener('click', () => showLibraryDetail(album, tracks, 'fa-record-vinyl'));
+    return card;
+  });
+}
+function showLibraryDetail(title, tracks, icon) {
+  const art = trackArtSrc(tracks.find(t => trackArtSrc(t)) || {});
+  $('#lib-detail-header').innerHTML = `
+    <div class="w-16 h-16 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center flex-shrink-0">
+      ${art ? `<img class="w-full h-full object-cover" src="${art}" />` : `<i class="fa-solid ${icon} text-2xl text-white/30"></i>`}
+    </div>
+    <div class="min-w-0">
+      <h2 class="text-lg font-bold truncate">${escapeHtml(title)}</h2>
+      <p class="text-textSecondary text-xs">${tracks.length} song${tracks.length !== 1 ? 's' : ''}</p>
+    </div>`;
+  const list = $('#lib-detail-list');
+  list.innerHTML = '';
+  tracks.forEach(t => list.appendChild(libraryTrackRow(t, tracks)));
+  $$('.lib-panel').forEach(p => p.classList.add('hidden'));
+  $('#lib-detail-panel').classList.remove('hidden');
+}
+$('#lib-detail-back').addEventListener('click', () => {
+  $('#lib-detail-panel').classList.add('hidden');
+  const activeTab = $('.lib-tab.bg-white')?.dataset.tab || 'songs';
+  $(`#lib-${activeTab}-panel`).classList.remove('hidden');
+});
+
+/* ---- Playlists (mix of local library tracks + YouTube videos) ---- */
+function renderLibraryPlaylists() {
+  const grid = $('#lib-playlists-grid');
+  grid.innerHTML = '';
+  document.getElementById('lib-playlists-empty')?.remove();
+  const playlists = PlaylistStore.getAll();
+  if (!playlists.length) {
+    grid.parentElement.appendChild(el('div', 'col-span-2', emptyStateHtml('lib-playlists-empty', 'fa-list-ul', 'No playlists yet', 'Create one above to start mixing songs and videos.')));
+    return;
+  }
+  playlists.forEach(pl => {
+    let art = null;
+    for (const it of pl.items) {
+      if (it.type === 'library') { const t = libraryCache.find(x => x.id === it.trackId); if (t && trackArtSrc(t)) { art = trackArtSrc(t); break; } }
+      else if (it.type === 'youtube' && it.video.thumb) { art = it.video.thumb; break; }
+    }
+    const card = el('button', 'glass-card p-3 rounded-2xl text-left');
+    card.innerHTML = `
+      <div class="aspect-square rounded-xl overflow-hidden mb-3 bg-gradient-to-br from-accentRed/40 to-purple-700/40 flex items-center justify-center">
+        ${art ? `<img class="w-full h-full object-cover" src="${art}" onerror="this.remove()" />` : `<i class="fa-solid fa-list-ul text-2xl text-white/70"></i>`}
+      </div>
+      <h3 class="font-bold text-sm truncate">${escapeHtml(pl.name)}</h3>
+      <p class="text-textSecondary text-[11px] truncate">${pl.items.length} item${pl.items.length !== 1 ? 's' : ''}</p>`;
+    card.addEventListener('click', () => showPlaylistDetail(pl));
+    grid.appendChild(card);
+  });
+}
+
+function playlistLibraryRow(track, queueTracks, playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+  const art = trackArtSrc(track);
+  row.innerHTML = `
+    <button class="pl-item-play w-12 h-12 rounded-xl bg-gradient-to-br from-accentRed/60 to-purple-700/60 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+      ${art ? `<img src="${art}" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : ''}
+      <i class="fa-solid fa-play text-white relative z-10"></i>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h3 class="font-bold text-sm truncate">${escapeHtml(track.name)}</h3>
+      <p class="text-textSecondary text-xs truncate">${escapeHtml(track.artist || 'Unknown Artist')}</p>
+    </div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-play').addEventListener('click', () => playLibraryTrack(track.id, queueTracks));
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+function playlistVideoRow(video, queueVideos, playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl');
+  row.innerHTML = `
+    <button class="pl-item-play w-20 h-14 rounded-lg overflow-hidden flex-shrink-0 relative">
+      <img class="w-full h-full object-cover" src="${video.thumb}" alt="" />
+      <div class="absolute inset-0 bg-black/20 flex items-center justify-center"><i class="fa-solid fa-play text-xs text-white"></i></div>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h4 class="text-sm font-bold truncate">${escapeHtml(video.title)}</h4>
+      <p class="text-[11px] text-textSecondary truncate">${escapeHtml(video.channel)}</p>
+    </div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-play').addEventListener('click', () => playVideo(video, queueVideos));
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+function playlistMissingRow(playlistId, itemIndex) {
+  const row = el('div', 'flex items-center gap-4 glass-card p-3 rounded-2xl opacity-60');
+  row.innerHTML = `
+    <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-triangle-exclamation text-white/30"></i></div>
+    <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-textSecondary">Track no longer available</p></div>
+    <button class="pl-item-remove text-textSecondary text-sm flex-shrink-0 px-1" aria-label="Remove from playlist"><i class="fa-solid fa-xmark"></i></button>`;
+  row.querySelector('.pl-item-remove').addEventListener('click', () => {
+    PlaylistStore.removeItemAt(playlistId, itemIndex);
+    showPlaylistDetail(PlaylistStore.get(playlistId));
+    renderLibraryPlaylists();
+    toast('Removed from playlist');
+  });
+  return row;
+}
+
+let currentPlaylistId = null;
+function showPlaylistDetail(playlist) {
+  if (!playlist) return;
+  currentPlaylistId = playlist.id;
+  $('#playlist-detail-title').textContent = playlist.name;
+  $('#playlist-detail-count').textContent = `${playlist.items.length} item${playlist.items.length !== 1 ? 's' : ''}`;
+  const list = $('#playlist-detail-list');
+  list.innerHTML = '';
+  if (!playlist.items.length) {
+    list.appendChild(el('div', '', emptyStateHtml('x', 'fa-list-ul', 'Empty playlist', 'Add songs or YouTube videos to get started.')));
+  } else {
+    const libraryTracks = playlist.items.filter(it => it.type === 'library').map(it => libraryCache.find(t => t.id === it.trackId)).filter(Boolean);
+    const videos = playlist.items.filter(it => it.type === 'youtube').map(it => it.video);
+    playlist.items.forEach((it, idx) => {
+      if (it.type === 'library') {
+        const track = libraryCache.find(t => t.id === it.trackId);
+        list.appendChild(track ? playlistLibraryRow(track, libraryTracks, playlist.id, idx) : playlistMissingRow(playlist.id, idx));
+      } else if (it.type === 'youtube') {
+        list.appendChild(playlistVideoRow(it.video, videos, playlist.id, idx));
+      }
+    });
+  }
+  $$('.lib-panel').forEach(p => p.classList.add('hidden'));
+  $('#lib-playlist-detail-panel').classList.remove('hidden');
+}
+$('#playlist-detail-back').addEventListener('click', () => {
+  $('#lib-playlist-detail-panel').classList.add('hidden');
+  $('#lib-playlists-panel').classList.remove('hidden');
+});
+$('#playlist-detail-rename').addEventListener('click', () => {
+  const pl = PlaylistStore.get(currentPlaylistId);
+  if (!pl) return;
+  const name = prompt('Rename playlist', pl.name);
+  if (name === null) return;
+  PlaylistStore.rename(pl.id, name);
+  showPlaylistDetail(PlaylistStore.get(pl.id));
+  renderLibraryPlaylists();
+});
+$('#playlist-detail-delete').addEventListener('click', () => {
+  const pl = PlaylistStore.get(currentPlaylistId);
+  if (!pl) return;
+  if (!confirm(`Delete "${pl.name}"? This can't be undone.`)) return;
+  PlaylistStore.remove(pl.id);
+  $('#lib-playlist-detail-panel').classList.add('hidden');
+  $('#lib-playlists-panel').classList.remove('hidden');
+  renderLibraryPlaylists();
+  toast('Playlist deleted');
+});
+$('#playlist-create-btn').addEventListener('click', () => {
+  const name = prompt('Name your playlist');
+  if (name === null) return;
+  PlaylistStore.create(name);
+  renderLibraryPlaylists();
+});
+
+/* Add-to-playlist sheet: works for both a library track and a YouTube video */
+let pendingPlaylistItem = null; // { type:'library', trackId } or { type:'youtube', video }
+function openAddToPlaylistSheet(item) {
+  pendingPlaylistItem = item;
+  const list = $('#add-to-playlist-list');
+  const playlists = PlaylistStore.getAll();
+  list.innerHTML = '';
+  if (!playlists.length) {
+    list.innerHTML = `<p class="text-textSecondary text-sm text-center py-8">No playlists yet — create one above.</p>`;
+  } else {
+    playlists.forEach(pl => {
+      const already = PlaylistStore.hasItem(pl, item);
+      const row = el('button', 'w-full flex items-center justify-between py-3 px-1 text-left');
+      row.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-list-ul text-white/50 text-xs"></i></div>
+          <div class="min-w-0"><p class="text-sm font-semibold truncate">${escapeHtml(pl.name)}</p><p class="text-textSecondary text-[11px]">${pl.items.length} item${pl.items.length !== 1 ? 's' : ''}</p></div>
+        </div>
+        ${already ? '<i class="fa-solid fa-check text-accentRed"></i>' : ''}`;
+      row.addEventListener('click', () => {
+        const added = PlaylistStore.addItem(pl.id, item);
+        closeAllSheets();
+        renderLibraryPlaylists();
+        toast(added ? `Added to ${pl.name}` : `Already in ${pl.name}`);
+      });
+      list.appendChild(row);
+    });
+  }
+  closeAllSheets();
+  openSheet('#add-to-playlist-sheet');
+}
+$('#add-to-playlist-new-btn').addEventListener('click', () => {
+  const name = prompt('Name your playlist');
+  if (name === null) return;
+  const pl = PlaylistStore.create(name);
+  if (pendingPlaylistItem) PlaylistStore.addItem(pl.id, pendingPlaylistItem);
+  closeAllSheets();
+  renderLibraryPlaylists();
+  toast(`Added to ${pl.name}`);
+});
+$('#yt-now-add-playlist').addEventListener('click', () => {
+  if (!currentVideo) return;
+  openAddToPlaylistSheet({ type: 'youtube', video: currentVideo });
+});
+
+/* ---- Edit track info ---- */
+let editingTrackId = null;
+let editingTrackArtOverride = null; // data URL if user picked a new image
+function openEditTrackSheet(track) {
+  editingTrackId = track.id;
+  editingTrackArtOverride = null;
+  $('#edit-field-title').value = track.name || '';
+  $('#edit-field-artist').value = track.artist === 'Unknown Artist' ? '' : (track.artist || '');
+  $('#edit-field-album').value = track.album || '';
+  $('#edit-field-genre').value = track.genre || '';
+  $('#edit-field-year').value = track.year || '';
+  const art = trackArtSrc(track);
+  const preview = $('#edit-art-preview'), icon = $('#edit-art-icon');
+  if (art) { preview.src = art; preview.classList.remove('hidden'); icon.classList.add('hidden'); }
+  else { preview.classList.add('hidden'); icon.classList.remove('hidden'); }
+  closeAllSheets();
+  openSheet('#edit-track-sheet');
+}
+$('#edit-art-change').addEventListener('click', () => $('#edit-art-input').click());
+$('#edit-art-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const dataUrl = await downscaleImageBytes(bytes, file.type);
+  if (!dataUrl) { toast('Could not use that image'); return; }
+  editingTrackArtOverride = dataUrl;
+  const preview = $('#edit-art-preview'), icon = $('#edit-art-icon');
+  preview.src = editingTrackArtOverride; preview.classList.remove('hidden'); icon.classList.add('hidden');
+});
+$('#edit-fetch-art').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const title = $('#edit-field-title').value.trim();
+  const artist = $('#edit-field-artist').value.trim();
+  if (!title) { toast('Enter a title first'); return; }
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Searching...';
+  const url = await fetchITunesArtwork(title, artist || 'Unknown Artist');
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-magnifying-glass mr-1"></i> Look up artwork online';
+  if (!url) { toast('No matching artwork found'); return; }
+  editingTrackArtOverride = url;
+  const preview = $('#edit-art-preview'), icon = $('#edit-art-icon');
+  preview.src = url; preview.classList.remove('hidden'); icon.classList.add('hidden');
+});
+$('#edit-save-btn').addEventListener('click', async () => {
+  if (!editingTrackId) return;
+  const track = await LibraryDB.get(editingTrackId);
+  if (!track) { closeAllSheets(); return; }
+  track.name = $('#edit-field-title').value.trim() || track.name;
+  track.artist = $('#edit-field-artist').value.trim() || 'Unknown Artist';
+  track.album = $('#edit-field-album').value.trim();
+  track.genre = $('#edit-field-genre').value.trim();
+  track.year = $('#edit-field-year').value.trim();
+  if (editingTrackArtOverride) {
+    if (editingTrackArtOverride.startsWith('data:')) { track.artDataUrl = editingTrackArtOverride; track.artUrl = null; }
+    else { track.artUrl = editingTrackArtOverride; track.artDataUrl = null; }
+  }
+  await LibraryDB.updateTrack(track);
+  closeAllSheets();
+  toast('Song info updated');
+  await loadLibraryView();
+  if (Player.mode === 'library' && currentItem()?.id === track.id) { Player.queue[Player.index] = track; renderNowPlaying(); renderMiniPlayer(); }
+});
+
+/* =====================================================================
+   VIEW SWITCHING & NAV
+   ===================================================================== */
+const VIEW_META = {
+  explore: { title: 'Listen Now', icon: 'fa-record-vinyl' },
+  discover: { title: 'Explore', icon: 'fa-solid fa-compass' },
+  video: { title: 'Videos', icon: 'fa-brands fa-youtube' },
+  radio: { title: 'Radio', icon: 'fa-solid fa-tower-broadcast' },
+  library: { title: 'Your Library', icon: 'fa-solid fa-layer-group' },
+};
+const loadedViews = new Set();
+function switchView(name) {
+  $$('.view').forEach(v => v.classList.remove('active'));
+  $(`#view-${name}`).classList.add('active');
+  $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
+  const meta = VIEW_META[name];
+  $('#header-title-text').textContent = meta.title;
+  $('#app-scroll').scrollTop = 0;
+  if (!loadedViews.has(name)) {
+    loadedViews.add(name);
+    if (name === 'explore') loadExplore();
+    if (name === 'radio') loadRadioView();
+    if (name === 'video') loadVideoView('trending music');
+    if (name === 'library') loadLibraryView();
+    // 'discover' has no default load — it starts on the empty/prompt state until searched
+  } else if (name === 'library') {
+    loadLibraryView(); // library changes often (uploads) — always refresh
+  }
+}
+$$('.nav-item').forEach(btn => btn.addEventListener('click', () => { haptic(); switchView(btn.dataset.view); }));
+
+/* ============ LIQUID GLASS BOTTOM NAV — pill + glare behavior ============ */
+(function setupLiquidNav() {
+  const navBarEl = document.querySelector('nav.app-bottom-nav');
+  const navPillEl = $('#nav-active-pill');
+  const navGlareEl = $('#nav-glare');
+  if (!navBarEl || !navPillEl) return;
+
+  function updateNavPill(smooth) {
+    const activeBtn = navBarEl.querySelector('.nav-item.active');
+    if (!activeBtn) return;
+    navPillEl.style.transition = smooth
+      ? 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1), width 0.5s cubic-bezier(0.34,1.2,0.64,1), height 0.5s cubic-bezier(0.34,1.2,0.64,1)'
+      : 'none';
+    navPillEl.style.width = activeBtn.offsetWidth + 'px';
+    navPillEl.style.height = activeBtn.offsetHeight + 'px';
+    navPillEl.style.transform = `translate(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px)`;
+  }
+
+  $$('.nav-item').forEach(btn => btn.addEventListener('click', () => requestAnimationFrame(() => updateNavPill(true))));
+  window.addEventListener('resize', () => updateNavPill(false));
+  // Snap into place once layout has settled (fonts/icons loaded, desktop sidebar vs mobile bar decided)
+  window.addEventListener('DOMContentLoaded', () => setTimeout(() => updateNavPill(false), 60));
+  setTimeout(() => updateNavPill(false), 60);
+
+  if (navGlareEl) {
+    navBarEl.addEventListener('mousemove', (e) => {
+      const rect = navBarEl.getBoundingClientRect();
+      navGlareEl.style.setProperty('--x', (e.clientX - rect.left) + 'px');
+      navGlareEl.style.setProperty('--y', (e.clientY - rect.top) + 'px');
+    });
+  }
+})();
+
+/* Video category chips */
+$$('.video-cat').forEach(btn => btn.addEventListener('click', () => {
+  $$('.video-cat').forEach(b => { b.classList.remove('bg-white', 'text-black'); b.classList.add('glass'); });
+  btn.classList.add('bg-white', 'text-black'); btn.classList.remove('glass');
+  loadVideoView(btn.dataset.q);
+}));
+
+/* Explore "See All" shortcuts */
+$('.explore-see-all-radio')?.addEventListener('click', () => switchView('radio'));
+$('.explore-see-all-video')?.addEventListener('click', () => switchView('video'));
+
+/* Library tabs */
+$$('.lib-tab').forEach(btn => btn.addEventListener('click', () => {
+  $$('.lib-tab').forEach(b => { b.classList.remove('bg-white', 'text-black'); b.classList.add('glass', 'text-textSecondary'); });
+  btn.classList.add('bg-white', 'text-black'); btn.classList.remove('glass', 'text-textSecondary');
+  $$('.lib-panel').forEach(p => p.classList.add('hidden'));
+  $(`#lib-${btn.dataset.tab}-panel`).classList.remove('hidden');
+  ensureLibraryTabRendered(btn.dataset.tab);
+}));
+
+/* Library file upload */
+$('#library-add-btn').addEventListener('click', () => $('#library-file-input').click());
+
+/* Drag & drop multiple files onto the "Add music" button */
+const addBtn = $('#library-add-btn');
+addBtn.addEventListener('drop', (e) => {
+  e.preventDefault();
+  addBtn.classList.remove('border-accentRed', 'bg-white/[0.06]');
+  const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|flac|ogg|aac)$/i.test(f.name));
+  if (files.length) importLibraryFiles(files);
+  else if (e.dataTransfer?.files?.length) toast('Only audio files are supported');
+});
+
+$('#library-file-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = ''; // reset so selecting the same file(s) again still fires 'change'
+  if (files.length) await importLibraryFiles(files);
+});
+
+/* Import any number of files at once: metadata (ID3 + iTunes art) fetched with limited
+   concurrency so a big batch stays fast without hammering the network. */
+async function importLibraryFiles(files) {
+  const total = files.length;
+  const btn = $('#library-add-btn');
+  const progress = $('#library-add-progress');
+  const progressText = $('#library-add-progress-text');
+  const progressBar = $('#library-add-progress-bar');
+  btn.classList.add('opacity-50', 'pointer-events-none');
+  progress.classList.remove('hidden');
+  progress.classList.add('flex');
+
+  let completed = 0, added = 0, failed = 0;
+  const CONCURRENCY = 3;
+  const queue = files.slice();
+
+  function updateProgress(name) {
+    progressText.textContent = `Adding ${completed}/${total}${name ? ' — ' + name : ''}`;
+    progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
+  }
+  updateProgress('');
+
+  async function worker() {
+    while (queue.length) {
+      const file = queue.shift();
+      if (!file) break;
+      try {
+        await LibraryDB.addTrack(file);
+        added++;
+      } catch (err) {
+        console.error('Failed to add', file.name, err);
+        failed++;
+      }
+      completed++;
+      updateProgress(file.name);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker));
+
+  progress.classList.add('hidden');
+  progress.classList.remove('flex');
+  btn.classList.remove('opacity-50', 'pointer-events-none');
+  await loadLibraryView();
+  toast(failed ? `Added ${added} track${added !== 1 ? 's' : ''}, ${failed} failed` : `Added ${added} track${added !== 1 ? 's' : ''}`);
+}
+
+/* =====================================================================
+   SEARCH OVERLAY (radio stations + youtube)
+   ===================================================================== */
+$('#header-search-btn').addEventListener('click', () => { $('#search-overlay').classList.remove('hidden'); $('#search-input').focus(); });
+$('#search-close').addEventListener('click', () => { $('#search-overlay').classList.add('hidden'); $('#search-input').value = ''; $('#search-results').innerHTML = ''; });
+let searchDebounce = null;
+$('#search-input').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  const q = e.target.value.trim();
+  if (!q) { $('#search-results').innerHTML = ''; return; }
+  searchDebounce = setTimeout(() => runSearch(q), 400);
+});
+async function runSearch(q) {
+  const results = $('#search-results');
+  results.innerHTML = '<div class="skeleton h-16 rounded-2xl"></div><div class="skeleton h-16 rounded-2xl"></div>';
+  await refreshLibraryCache();
+  const qLower = q.toLowerCase();
+  const libMatches = libraryCache.filter(t => t.name.toLowerCase().includes(qLower) || (t.artist || '').toLowerCase().includes(qLower));
+  const [stations, videos] = await Promise.allSettled([RadioAPI.searchStations(q, 10), YouTubeAPI.search(q, 6)]);
+  results.innerHTML = '';
+  if (libMatches.length) {
+    results.appendChild(el('h3', 'text-xs font-bold uppercase tracking-wide text-textSecondary mt-2 mb-1', 'Your Library'));
+    libMatches.forEach(t => { const row = libraryTrackRow(t, libMatches); results.appendChild(row); });
+  }
+  if (stations.status === 'fulfilled' && stations.value.length) {
+    results.appendChild(el('h3', 'text-xs font-bold uppercase tracking-wide text-textSecondary mt-2 mb-1', 'Radio Stations'));
+    stations.value.forEach(st => {
+      const row = el('button', 'w-full flex items-center gap-4 glass-card p-3 rounded-2xl text-left');
+      row.innerHTML = `<div class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">${st.favicon ? `<img class="w-full h-full object-cover rounded-lg" src="${st.favicon}" onerror="this.remove()" />` : `<i class="fa-solid fa-tower-broadcast text-white/30 text-sm"></i>`}</div><div class="min-w-0"><p class="text-sm font-bold truncate">${escapeHtml(st.name)}</p><p class="text-xs text-textSecondary truncate">${escapeHtml(st.country || '')}</p></div>`;
+      row.addEventListener('click', () => { playRadioStation(st, stations.value); $('#search-close').click(); });
+      results.appendChild(row);
+    });
+  }
+  if (videos.status === 'fulfilled' && videos.value.length) {
+    results.appendChild(el('h3', 'text-xs font-bold uppercase tracking-wide text-textSecondary mt-4 mb-1', 'YouTube'));
+    videos.value.forEach(v => { const row = videoListItem(v, videos.value); row.addEventListener('click', () => $('#search-close').click()); results.appendChild(row); });
+  }
+  if (results.innerHTML === '') results.innerHTML = '<p class="text-textSecondary text-sm text-center py-8">No results found.</p>';
+}
+
+/* =====================================================================
+   NOW PLAYING SHEET + BOTTOM SHEETS
+   ===================================================================== */
+const overlayEl = $('#overlay');
+function openSheet(id) { $(id).classList.add('open'); overlayEl.classList.add('open'); document.body.style.overflow = 'hidden'; }
+function closeAllSheets() { $$('.bottom-sheet').forEach(s => s.classList.remove('open')); overlayEl.classList.remove('open'); document.body.style.overflow = ''; pauseVisualizerLoop(); }
+overlayEl.addEventListener('click', closeAllSheets);
+$$('.close-sheet').forEach(btn => btn.addEventListener('click', closeAllSheets));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllSheets(); });
+
+$('#mini-player').addEventListener('click', () => { if (Player.mode) { openSheet('#now-playing-sheet'); resumeVisualizerLoopIfNeeded(); } });
+$('#np-minimize').addEventListener('click', closeAllSheets);
+$('#np-playpause').addEventListener('click', togglePlayPause);
+$('#mini-playpause').addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
+$('#mini-prev').addEventListener('click', (e) => { e.stopPropagation(); playPrev(); });
+$('#mini-next').addEventListener('click', (e) => { e.stopPropagation(); playNext(false); });
+$('#np-next').addEventListener('click', () => playNext(false));
+$('#np-prev').addEventListener('click', playPrev);
+$('#np-shuffle').addEventListener('click', () => {
+  Player.shuffle = !Player.shuffle;
+  haptic();
+  setAdaptiveActive($('#np-shuffle'), Player.shuffle);
+  toast(Player.shuffle ? 'Shuffle on' : 'Shuffle off');
+  preloadStandby(); // re-prime the gapless preload so the next auto-advance respects the new setting
+});
+$('#np-repeat').addEventListener('click', () => {
+  Player.repeat = !Player.repeat;
+  haptic();
+  setAdaptiveActive($('#np-repeat'), Player.repeat);
+  toast(Player.repeat ? 'Repeat on' : 'Repeat off');
+  preloadStandby();
+});
+$('#np-queue-btn').addEventListener('click', () => openSheet('#queue-sheet'));
+$('#np-menu-btn').addEventListener('click', () => { populateMenuSheet(); openSheet('#menu-sheet'); });
+$('#np-lyrics-card').addEventListener('click', () => { openSheet('#lyrics-sheet'); Lyrics.activeIndex = -1; updateSyncedLyricsHighlight(); });
+$('#np-progress-track').addEventListener('click', (e) => {
+  if (Player.mode !== 'library' || !audioEl.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audioEl.currentTime = pct * audioEl.duration;
+});
+$('#np-like-btn').addEventListener('click', () => {
+  const item = currentItem();
+  if (!item) return;
+  haptic();
+  if (Player.mode === 'radio') { toggleSavedStation(item); }
+  else { if (State.likedTracks.includes(item.id)) State.likedTracks = State.likedTracks.filter(id => id !== item.id); else State.likedTracks.push(item.id); persistLikes(); }
+  renderNowPlaying();
+  toast('Saved to Library');
+});
+
+function populateMenuSheet() {
+  const item = currentItem();
+  if (!item) return;
+  const artWrap = $('#menu-art-wrap'), art = $('#menu-art'), icon = $('#menu-art-icon');
+  const menuArtSrc = Player.mode === 'radio' ? item.favicon : trackArtSrc(item);
+  if (menuArtSrc) { art.src = menuArtSrc; art.classList.remove('hidden'); icon.classList.add('hidden'); art.onerror = () => { art.classList.add('hidden'); icon.classList.remove('hidden'); }; }
+  else { art.classList.add('hidden'); icon.classList.remove('hidden'); icon.className = `fa-solid ${Player.mode === 'radio' ? 'fa-tower-broadcast' : 'fa-music'} text-white`; }
+  $('#menu-title').textContent = item.name;
+  $('#menu-subtitle').textContent = Player.mode === 'radio' ? (item.tags || 'Radio') : (item.artist || 'Unknown Artist');
+  $('#menu-remove').classList.toggle('hidden', Player.mode !== 'library');
+  $('#menu-edit').classList.toggle('hidden', Player.mode !== 'library');
+  $('#menu-add-playlist').classList.toggle('hidden', Player.mode !== 'library');
+  $('#menu-save').onclick = () => { if (Player.mode === 'radio') toggleSavedStation(item); else { if (!State.likedTracks.includes(item.id)) { State.likedTracks.push(item.id); persistLikes(); } } closeAllSheets(); toast('Saved to Library'); };
+  $('#menu-edit').onclick = () => { if (Player.mode === 'library') openEditTrackSheet(item); };
+  $('#menu-add-playlist').onclick = () => { if (Player.mode === 'library') openAddToPlaylistSheet({ type: 'library', trackId: item.id }); };
+  $('#menu-remove').onclick = async () => { await LibraryDB.remove(item.id); closeAllSheets(); toast('Removed'); await loadLibraryView(); };
+  $('#menu-share').onclick = () => { navigator.clipboard?.writeText(item.url_resolved || item.url || item.name).then(() => toast('Copied')); };
+  $('#menu-sleep').onclick = () => { closeAllSheets(); updateSleepStatus(); openSheet('#sleep-sheet'); };
+}
+
+/* Sleep timer sheet */
+$$('.sleep-opt').forEach(btn => btn.addEventListener('click', () => { setSleepTimer(parseInt(btn.dataset.min, 10)); closeAllSheets(); }));
+$('#sleep-cancel').addEventListener('click', () => { cancelSleepTimer(); closeAllSheets(); });
+
+/* =====================================================================
+   THEME TOGGLE
+   ===================================================================== */
+function applyTheme() {
+  document.documentElement.classList.toggle('light', State.theme === 'light');
+  $('#theme-toggle').innerHTML = `<i class="fa-solid ${State.theme === 'light' ? 'fa-sun' : 'fa-moon'} text-sm"></i>`;
+}
+$('#theme-toggle').addEventListener('click', () => { State.theme = State.theme === 'light' ? 'dark' : 'light'; lsSet('mylo:theme', State.theme); applyTheme(); });
+applyTheme();
+
+/* =====================================================================
+   AUTH — Supabase magic link, or guest mode via localStorage
+   ===================================================================== */
+function enterApp() {
+  $('#auth-gate').style.display = 'none';
+  // Launched from a manifest shortcut (e.g. long-pressing the home screen icon)?
+  const requestedView = new URLSearchParams(location.search).get('view');
+  switchView(VIEW_META[requestedView] ? requestedView : 'explore');
+}
+
+/* Detects whether this copy of the app is running inside the Capacitor native
+   shell (see the mylo-capacitor project) vs. a plain browser tab. Safe to call
+   even when Capacitor isn't present at all — always false on the web. */
+function isCapacitorNative() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+const NATIVE_AUTH_REDIRECT = 'mylo://auth-callback'; // must match the custom URL scheme registered in the native Android/iOS projects
+function getAuthRedirectUrl() {
+  return isCapacitorNative() ? NATIVE_AUTH_REDIRECT : window.location.href;
+}
+
+async function initAuth() {
+  if (!supabaseClient) {
+    $('#auth-config-warning').classList.remove('hidden');
+    if (lsGet('mylo:guest', false)) enterApp();
+    return;
+  }
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session?.user) { currentUser = session.user; enterApp(); updateAccountSheet(); return; }
+  if (lsGet('mylo:guest', false)) { enterApp(); return; }
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session?.user) { currentUser = session.user; updateAccountSheet(); if ($('#auth-gate').style.display !== 'none') enterApp(); }
+  });
+}
+
+/* Sign in / Sign up mode toggle */
+let authMode = 'signin'; // 'signin' | 'signup'
+function setAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+  $('#auth-mode-signin').classList.toggle('bg-white', !isSignup);
+  $('#auth-mode-signin').classList.toggle('text-black', !isSignup);
+  $('#auth-mode-signin').classList.toggle('text-textSecondary', isSignup);
+  $('#auth-mode-signup').classList.toggle('bg-white', isSignup);
+  $('#auth-mode-signup').classList.toggle('text-black', isSignup);
+  $('#auth-mode-signup').classList.toggle('text-textSecondary', !isSignup);
+  $('#auth-submit-label').textContent = isSignup ? 'Create Account' : 'Sign In';
+  $('#auth-password').autocomplete = isSignup ? 'new-password' : 'current-password';
+  $('#auth-status').textContent = '';
+}
+$('#auth-mode-signin').addEventListener('click', () => setAuthMode('signin'));
+$('#auth-mode-signup').addEventListener('click', () => setAuthMode('signup'));
+
+$('#auth-password-toggle').addEventListener('click', () => {
+  const input = $('#auth-password');
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  $('#auth-password-toggle').innerHTML = `<i class="fa-solid ${showing ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+});
+
+function setAuthStatus(msg, tone) {
+  const status = $('#auth-status');
+  status.textContent = msg;
+  status.className = `text-[11px] min-h-[16px] ${tone === 'error' ? 'text-red-400' : tone === 'ok' ? 'text-green-400' : tone === 'warn' ? 'text-amber-400' : 'text-textSecondary'}`;
+}
+
+/* Email + password sign in / sign up */
+$('#auth-submit').addEventListener('click', async () => {
+  const email = $('#auth-email').value.trim();
+  const password = $('#auth-password').value;
+  if (!email || !email.includes('@')) { setAuthStatus('Enter a valid email address.', 'error'); return; }
+  if (!password || password.length < 6) { setAuthStatus('Password must be at least 6 characters.', 'error'); return; }
+  if (!supabaseClient) { setAuthStatus('Supabase is not configured — use Guest mode below.', 'warn'); return; }
+
+  setAuthStatus(authMode === 'signup' ? 'Creating your account...' : 'Signing in...', 'default');
+  try {
+    if (authMode === 'signup') {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo: getAuthRedirectUrl() } });
+      if (error) throw error;
+      if (data.session) { setAuthStatus('Account created!', 'ok'); }
+      else { setAuthStatus('Account created — check your inbox to confirm your email, then sign in.', 'ok'); setAuthMode('signin'); }
+    } else {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      setAuthStatus('Signed in!', 'ok');
+    }
+  } catch (e) {
+    setAuthStatus(e.message || 'Something went wrong.', 'error');
+  }
+});
+
+/* Magic link (passwordless) fallback */
+$('#auth-send-link').addEventListener('click', async () => {
+  const email = $('#auth-email').value.trim();
+  if (!email || !email.includes('@')) { setAuthStatus('Enter a valid email address.', 'error'); return; }
+  if (!supabaseClient) { setAuthStatus('Supabase is not configured — use Guest mode below.', 'warn'); return; }
+  setAuthStatus('Sending link...', 'default');
+  try {
+    const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: getAuthRedirectUrl() } });
+    if (error) throw error;
+    setAuthStatus('Check your inbox for a sign-in link.', 'ok');
+  } catch (e) {
+    setAuthStatus(e.message || 'Could not send the link.', 'error');
+  }
+});
+$('#auth-guest').addEventListener('click', () => { lsSet('mylo:guest', true); enterApp(); });
+
+/* Google sign-in (Supabase OAuth, "Option A" — browser-redirect flow).
+   On the web this just navigates to Google and back; on the web this is all
+   that's needed since the redirect lands back on this same page and
+   initAuth()'s onAuthStateChange listener picks up the session automatically.
+   Inside the Capacitor native shell, a plain redirect would navigate the
+   app's own WebView away to Google's page with no way back — so instead we
+   open Google's page in the system browser (via the Browser plugin) and wait
+   for it to hand control back through the custom mylo://auth-callback deep
+   link, completed in initCapacitorBridge()'s appUrlOpen listener. */
+$('#auth-google').addEventListener('click', async () => {
+  const statusEl = $('#auth-google-status');
+  const setGoogleStatus = (msg, tone) => {
+    statusEl.textContent = msg;
+    statusEl.className = `text-[11px] min-h-[16px] text-center ${tone === 'error' ? 'text-red-400' : 'text-textSecondary'}`;
+  };
+  if (!supabaseClient) { setGoogleStatus('Supabase is not configured — use Guest mode below.'); return; }
+  setGoogleStatus('Opening Google sign-in...');
+  try {
+    if (isCapacitorNative()) {
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      const Browser = window.Capacitor.Plugins.Browser;
+      if (Browser) await Browser.open({ url: data.url });
+      else window.open(data.url, '_blank'); // Browser plugin not installed — best-effort fallback
+    } else {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: getAuthRedirectUrl() },
+      });
+      if (error) throw error;
+      // Browser navigates away here; nothing further to do on this page load.
+    }
+  } catch (e) {
+    setGoogleStatus(e.message || 'Could not start Google sign-in.', 'error');
+  }
+});
+
+function updateAccountSheet() {
+  if (currentUser) {
+    $('#account-email').textContent = currentUser.email || 'Signed in';
+    $('#account-status').textContent = 'Signed in with Supabase';
+    $('#account-signin').classList.add('hidden');
+    $('#account-signout').classList.remove('hidden');
+  } else {
+    $('#account-email').textContent = 'Guest';
+    $('#account-status').textContent = 'Not signed in — using local storage';
+    $('#account-signin').classList.remove('hidden');
+    $('#account-signout').classList.add('hidden');
+  }
+}
+$('#header-profile-btn').addEventListener('click', () => { updateAccountSheet(); openSheet('#account-sheet'); });
+$('#account-signin').addEventListener('click', () => { closeAllSheets(); lsSet('mylo:guest', false); $('#auth-gate').style.display = 'flex'; });
+$('#account-signout').addEventListener('click', async () => { if (supabaseClient) await supabaseClient.auth.signOut(); currentUser = null; lsSet('mylo:guest', true); closeAllSheets(); updateAccountSheet(); toast('Signed out'); });
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+/* ---- PWA Install ("Download App") ----
+   The button is always visible (unless already installed) rather than gated
+   behind the flaky beforeinstallprompt event, since that event never fires at
+   all in several common, totally normal situations: opening the file directly
+   from disk (file://) instead of a hosted https:// page, desktop Safari,
+   Firefox, or simply before the browser's own engagement heuristics decide
+   the page qualifies. When a real native prompt is available we use it;
+   otherwise we show accurate, platform-specific manual instructions instead
+   of just doing nothing. */
+let deferredInstallPrompt = null;
+function isStandaloneApp() {
+  try {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  } catch (e) { return false; }
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  $('#account-install-app').classList.add('hidden');
+  toast('MYLO installed!');
+});
+function detectPlatform() {
+  const ua = navigator.userAgent;
+  const isIOS = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
+  const isAndroid = /android/i.test(ua);
+  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+  const isFirefox = /firefox|fxios/i.test(ua);
+  const isEdge = /edg\//i.test(ua);
+  const isChrome = /chrome|crios/i.test(ua) && !isEdge;
+  return { isIOS, isAndroid, isSafari, isFirefox, isEdge, isChrome };
+}
+function showInstallHelp() {
+  const { isIOS, isAndroid, isSafari, isFirefox, isEdge, isChrome } = detectPlatform();
+  let body;
+  if (location.protocol === 'file:') {
+    body = 'This copy is open as a local file, and browsers only allow installing apps served from a real website (https://). Host this file online, then open it there to install it.';
+  } else if (isIOS) {
+    body = 'Tap the Share icon in the toolbar, then choose "Add to Home Screen".';
+  } else if (isAndroid && isChrome) {
+    body = 'Open Chrome\'s menu (⋮) in the top right and choose "Install app" or "Add to Home screen".';
+  } else if (isChrome || isEdge) {
+    body = 'Click the install icon on the right side of the address bar (a monitor with a down arrow), or open the browser menu and choose "Install MYLO".';
+  } else if (isSafari) {
+    body = 'On macOS Safari: File menu → "Add to Dock". If that option isn\'t there, your Safari version doesn\'t support installing this app — try Chrome or Edge instead.';
+  } else if (isFirefox) {
+    body = 'Firefox doesn\'t support installing web apps directly. Try opening this page in Chrome, Edge, or Safari (iOS) instead.';
+  } else {
+    body = 'Look for an "Install" or "Add to Home Screen" option in your browser\'s menu.';
+  }
+  $('#install-help-body').textContent = body;
+  openSheet('#install-help-sheet');
+}
+$('#account-install-app').addEventListener('click', async () => {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (outcome === 'accepted') { toast('Installing MYLO...'); $('#account-install-app').classList.add('hidden'); }
+    return;
+  }
+  showInstallHelp();
+});
+function checkInstallVisibility() {
+  if (isStandaloneApp()) $('#account-install-app').classList.add('hidden');
+}
+
+function setupManifest() {
+  try {
+    const iconAny192 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAABmJLR0QA/wD/AP+gvaeTAAAat0lEQVR4nO2dd5gVRdbG31PddxJhCIoICAhDEgQURMEZRFRMiAnDioK6RlRUMH+L4mLaBV0x5zWseRFdFDCgyMyIO4ICioIMOcsShgEm3O463x8XFWTCDdXVfe/U73l4gLnd57wX6nRVV506RfARbt+vmUPWEUzcCYxOIHQCoxmAegAa7/k9zU+NhoQpB1ACxnYQSghYDeKFLmMBu7wgc8VXq/wURzqdcYteWZVZWScR80AQjgfQTbcGQ+BYDWAqQf7HTi+ZRYsWVep07nnjY0A4Obn9mXkEiM4F0MBrn4akZQeA15nE4+lLZ/+kw6FnAcBtB2SEbedyALcAONQrP4aUhAF8JiQ/ai8vnOalI+UBwC16ZTmZGSMlaDQRDlZt31Dn+BKSb0lbXjjXC+NKA6AiJ+9MAk8C0EalXUOdhwG8Gbb41npLCterNKwkAMo6D2grHOdxAgarsGcwVMNWZroufVn+W6oMJhwAFTl5Qwn8AoBsBXoMhiigt0PpzkhaNGdrwpbivZFzTk0Pc+nfQRiVqAiDIQ7WAHRWWnH+t4kYiSsAuHOfpmEn7UMAxyTi3GBIkFIJDMsoLpgarwER6w272/c/JOyk5cM0foP/NBDA+5U5eTfHayCmAKjo2LezTbIQQJd4HRoMihEAPxLOOfbOeG6Oegi0u2Pflra0CmGmOA0BhYBxoeKCe2O5J6oegDv3aWpL61OYxm8IMAyMC3fIuy2We2rtATjn1PQwSmfBjPkNyYFk4ML04oJ3o7m41h4gjNKHYRq/IXkQBLwazunXN5qLa+wB9ixyRRVJBkPA2BQK0RH0U/6Gmi6qtgco6zyg7Z4VXoMhGTkoXMmvci2jnGo/tB3nMZj0BkMyQzjR6ZB3S82XVMGerM73vVFlMGglDIij04pnf1fVh/v1ANyiV9aelGaDIRUIAfKp6oZC+/3QqZd1Hcx8vyG1OCack3d5VR/sMwTitgMyKi1nudnJZUhB/hdKdzv9MYV6nx4gbDuXm8bvMQ3rA9kN9v8VCvmtLNU5oLLSGv3HH/7WAzAgwjm5xTAb2OPDskCtW4By2gLt2oDatQYdegjQKBvUsH6k4UfbyHfuApeUAtt3ANtLwOs3gVesAVauAS9bDV6zHgiHPf06KcqOULp76N69gP3rH5z2xx4H0/ijp1E2RO/DQb17gHp3B3XtCNh27fdFQ/16oPr1gJbNAVQxVee64NXrwPN/BH/7A/i778FLVwJSqvGfujSsrBA3Arjn1x/89m9bmZP7EoDL/FCVFGSkg/r2gji+b6TR57QFKEA1vXbuAn+3CPKrueCZBZEew1AV20LlbktaO6cM2BMA3KpvZjjD2gCz8LUvjbIjDf74fhD9jwbqZfmtKGp4zXrwF19BziwEF80HHMdvSYGBwRenFxe+DuwJALPwtReZGRCnDIAYejqoV3fAinnTXPDYvAXyvemQk6eZniHCF2nFBQOBPQFQ2T53Ul3f3E7du0AMPQ1i8ElAg3p+y/EGZvC8hZDvfgQ5/QugrNxvRX7BUiAn4+eC5ZEAyMldCOBwn0XpR4jI0/7qi0GHdfBbjV5KSiH/NRnuq5OBrdv9VqMfwo1pSwseI27fr1mYxEbUpSrNQkCcfBzEjX8Gta/ji96VYchpn0M+8TJ41Vq/1WiDgRnpxQWnUjgn72QGz/BbkBYsAXHWKRDXXgJq08pvNcHCcSDfmwH30ReAzVv8VqOD8tDusqZU2SF3FBgpn/xG3bvAuudmUHdT0KJGysohX5sM98lXgN1lfqvxFAINEGB08luIpxzYFNaEv8D+97Om8UdDZgbEVcNgf/I6xIVDAJECs2DVwOBuAoyOfgvxBMuCuOJPCH36BsRZJwdr0SoJoIMOhDX+VtivTQK1bum3HG9gHC5AaO63DtVQq4Nh/+sxWLePTKrFqyBCfXrC/ugViKuGpcaayN4IdBVIsSOLxNmnwP7oFVDv7n5LSR0y0mHdeg3sN58EtUuhWTPGAVSZk7sFQBO/tSTMAU1gP3A76Ph+fitJbcrK4Y57BPK96X4rSRgGNlJlTm4FkvwoUurdA/YT44Gmjf2WUmeQb0+FO/5RoELroY6qqRBI8sYvLhwC+9V/mMavGXHBGbDfeQZ0SAu/pSRCevK+1dg2rL+OgTX+VrObyifosA6wp7wAOi55CwcmZwA0aQT71Uch/nSW30oM2Q1gP/tQ0v5fUGVOLvstIhaoxUGwXv5HZLthsuO6wM7d4NKdAO/5b3BcYNfuSK/WoF5kO2X95MhOlc+/AXfCM79/lyRA0R4+PdChrWG98g/Qwc38lhIdzOBV68Df/wT+cSmwflNkf++6jcCO0uhfIIlALQ4CDm0Nat8GlNMG1K4NqFsnICvT2+8QA+LKi4CmjeHe9RDgJsf2zKTpAahLB9j/fDjwL7u8ci248Btw4TeQRfOBklLvnFkW6PDOoD49Ifr0jKx9BGDhT077HO6Y8UmxCy0pAoCO7Ab7+QmRygoBhBcvg5wxC/zxLHDxSv+E2DYo9yiI0wZCnJjn68YeObMA7vVjAx8EgQ8AOrwz7NcmBeLJtg87d0FO/RTy7angRT/7rWZ/0tMg+h8NOutkiBPyfEljkNM+hzv63kAPhwIdAHToIbDfegpo0shvKb/B6zdBvvwO5NtTkyZdmFodDDFiKMR5g7U/SOR70+He8WBgX4wDGwB00IGw3n4K1DIYuXq8biPkYy9B/ufTwHfr1dKgHsT5Z8C6apjWh4p87vXI7FAACWYAZDeE/eYToA4BqNNVsgPuE69AvjEFqEyRamz168G6ahjEpecBmRlaXLpjJ0K+9YEWX7EQvAAIhWC/+qj/2ZzMke7770+n7KZxan4gxM1XRvZLeL3xxXXhXHU7ePZ/vfUTI4ELAOuemyEuPsdXDbxmPdzbHgDPXeCrDl1Q7x6wHrrD+33SJaVwzrkSvHqdt35iIFCpEGLIIN8bv3z/YzhnXFZnGj8A8NwFcAZfCvnc697WF81uAOupB7QNu6IhMD0AdekA+52ngYx0fwSUlcO962+QH37mj/+AQH16wprwl8jKs0fIDz6Be8t4z+zHQjB6gOyGsJ6637fGzyvXwhl6dZ1v/ADARfPhnH0F+OtvPfMhzhwUee8IAIEIAGvcaFArf87l4PmL4FxwLfjn5b74DyRbt8O59ObIkMgjrHvHBCKh0fcAECflQQw+wRff8pPZcC65MWVneRLClXAnPAP31vu82fWVlQnrobt8L7vir/eG9SHuudkX13L6F3BH3Q2UV/jiP1mQ738M5/IxkRRtxdCR3SAuOVe53VjwNQCssTeBDjpQu1/54Wdwbx4Xycc31AoXzYdz6WhPMlutMVf5NvwFfAwAGtDXlxchnjUH7i33BTpBK4jw/EVwLr4B+N/W2i+OhcwMWPeOUWszBvwJgLQQrLE3anfL3y+Gc+M95skfJ7x4GZyLbgC2bFNql/ofDXFCrlKb0eJLAIgR52kvt8ebNsO5+vakyeAMKrxiNZwrblX+TiDuuh5I11+gRH8AHNAE1sjhen1WhiObMzYr7r7rKPzDEjgj71KaHEitW0IMH6rMXrRoDwDruhHaN3m79z8Gnr9Iq89Uh7+aB/e2+5Xm+VtXD9O+i01rANDBzSDOP0OnS8iZBZBvmPP/vEB+NBPyxbfUGcxuCOvPF6qzFwVaA0BccwmQprGI1ZZtcP8yQZ+/Oog78VmlaRPisguARvpO69UWANT8QIihp+tyBwBwx09SP21n2BfXhXPTOPDGzWrsZWXCGq5vcUxbAIjhQ7U+/bmgCPKjmdr81Wm2bIN7233K3gfE8HO11TvSEwCZGXrH/pVhuOP+oc+fATznW8h3PlRjLLuhttGClgAQ554GZOs7h0O+PqVOHfkZFNyHngSv36TElhh+rpZjrfQEwEUaC6fu3AX3mdf0+TP8zs5dcO95WIkpatMK1LeXEls14XkAUPcuWqs7yH++Y9KbfYRnzQEXFCmxJYZ5/+D0PADE0NO8dvE7ZeVwX5usz5+hStz7H1eSbyUGHgs09nZK1NsASE+DOP1ET13sjXzzA2BbiTZ/hqrh4pWQ/56WuCHbhjhtYOJ2asDTABC5ffQVtHUl5Mvv6PFlqBX5+D+BcOK5QuLMQQrU1GDfS+M0qL+X5vdBzvoKvOEXbf4MNcObNkNOTbzIAPXs6mmFCu8CwLa15njLN4NXdq+uI59VUGeICORhO/IsAKhPT31z/5u3KJt5MKiDl68Cf/l1wnbECccqUFONbc8M5x7llen9kNNnmS2OAcVVkIlLfXp6Vtbdux6gX2+vTO+HnGZyfoIK5xcBm7ckZiQUAh3VQ42gP+BNADTOBnXJ8cT0fmwvAX9nNrsEFteNnKmQIOLoIxSIqcKuJ0aP6qGt4JH8ap63BV0NCSOnTE/YhlcjCk9aKfU4zAuzVcKF32jzZYgPXrIcvGJ1QjaoU3tPqkp7EwA9u3phtkp47vfafBniJ+HZIEuAunZSI2Yv1AeAJSIHOOtg5y7wyjV6fBkSQs5KfDqUundWoGRflAcAtWqhbTcP/7DEjP+TBP5mPlBWnpAN6tpRkZrfUR8AOW1Vm6wWXrpCmy9DglSGwfMWJmSC2rdVo2Uv1A+BNOb+m+FPcsELfkzofmrXWvkuMfU9QLvWqk1WC6802x6TCbngp8QMZGaADm6mRswePHgH0FjqWtH+U4MeEu0BAADN1ZbTVz8EUiywJlhxlWKDx2zdDl63MSET1LSxIjER1AYAkb4DLxwH2L5Djy+DMvi7HxIzkKF2MUxtADTO1lf8qnSX0sKsBj3wvMQWLnnZSjVC9qA0AEhj7R82df6TEv5kdvyp65u3gBcvU6pHbQ/QQNP+XyDhRRWDP/Av/wPPjm9VWE6epnzhU20ANNTXA6jYcG3wB3fCM7GXTdleAvcFhaXY96B2CKQpBQIAICx9vgxK4aUr4I6dGP0NrgvnlvuAEvWTHmp7AFtjo7R8P+PbkADy3Q8jJ8zUdgh3SSmca+9Ssre4Kmyl1nSe+m2ZHiDZkVNmgL/9AeK6ERAD+wHZDX/7jNesB380E+7L7yo/lXJv1AaAzh5Apy+DZ/CqtXBvux+uEJGttFmZ4O0lkWluDagNAJ2VGXT2NgbvkRLYsk376r7aVlRRodRcTVCjhrVfZDDUgtIA4HJ9AYB6WdqPWzWkHmp7gN16F6dIY+KdITVRGwA7SpWaqxXFueGGuofaIZDmI0mpuQkAQ2Ko7QG279A6E0RtWmrzZUhN1AaAlFrP56Lu+gpwGVIT5ZPpvG6DapPVQt07m5QIQ0KoD4BV61SbrJ56WaB2bfT5M6Qc6h+fqzUGAPTWITWkHup7gOWJFUGNFZ11SA2ph/oAWFys2mSN0PF9lRdLMtQd1AfAitVatytSswNAh3XQ5s+QWqh/B3AleInajcu1ofM0SkNq4ckcIi9c7IXZaqGB3p0iaEhtvAmAuQu8MFstdFgHkxhniAtPAkAWzddbtIrI9AKGuPBmGXXLNvCyVZ6Yrg5xUp5Wf4bUwLM8At0nt9MxRwINNRbmMqQEngWA/KzAK9NVY9sQA/rp9WlIerzrAeYu9KSQUU3Q8SYADLHhXSql6yo5GTAWxNE9tfozJD+e5hLzZ/lemt+fA5uC2rbS69OQ1HgaAPLLr4Fdu710sR90mPqjNA2pi7e7ScrKIad97qmL/TAb5Q0x4Pl2KvnedK9d7ANlm4JZhujxPAB47sJIhqgmWOWQSwhQ21agbp2AA5qosxtk6tcDHdKizhQdU1sbtBrklBmwRl+lwxWweUviNpo2hjXsbND5g38/9I8ZPGce3AefUH5Mj++EQhAXDoG4YAioU7vIz5jB3y+GfPEtyOlfpOx5bFSZk+v9N8tuiNDsfwMaDtBwBo8AL1ke9/3Urxfsh++u/olfGYZ7+wOQH34Wt48gQYe2hvXEeFDHdtVeI6d+CveOB4HK1DuVR09JhZIdkP+e5r2fLdvAxSvjvl0M6g/7pUdqHu6khWBNHAsx6Li4/QQFOvoI2JOfq7HxA4A44yRY94zWpEov2mqKyH++Hfu5ULH6mFkYd2Eu6tYJ1sSx0ZVZsQSsR+4G9e4Rl68gIAYeC/vFiUCD6Mb64vzBoOOO8ViVfrQFAK/dAPnBJ576kP96L74bbTvS+DNjOIQ5PQ32Mw+CctrG59NHxJBBsJ68D0hPi+k+64bLPFLkH1qrSrkTnwF2enPyh/xkNvinpXHdKy45B9Q+jvpC2Q1gvTABOLBpXH79QAw7G9aE/wPs2Oc/qMdhoBRbZ9FbVm3zVriTXlJvd8dOyPsfi+/ehvVh3XB53K6pZXPYz/0tcl5BwBHXXgJr3OiETtehvr0UKvIf7XUF5WuTwbPmqDPoSjhj/gpevymu28XF50Q9Dq4O6tYJ9ksPB3funAjW7SPVTEU3bZy4jQChv7Cm68IZdTd4/qLEbYXDcG8eF39AhUKwLjk3cR0A6MhusF+aGLxNOZaAdd9tEFf8SYk5qh/8ni4W/KksW1YO5+JRkG/9J24TvHYDnD9dH1mkiROR10fpCi8d0Q32+y+CDu+szGZCZDeA/fSDEOcPVmczjneHIONfaeWKSrhjJ8C5bAx44U/R31eyA+6kF+GcNhy84MeEJNCg/gndX6XNQ1rAfuspiOFqepa4dXTpAPu955VvElKaahIAfA9nLiiCU1AE6tkV4qQ80DFHgtq0ArIbRC5wJXjlGvCiJeCZhZCf5StbkaTuXZTY2Y+0EKyxN0GcPADuA4+DF/3sjZ+qsATEhWfCuuM6ICNdvf2dqRUAelIh4qFeFhAOe7f8ToTQj59736VLCTllBuSkF8EbfvHUFeX1gXXHdbWu7CaCc/Eo8H+/88y+boIbAF7TsD5C8zSmarsu5MxCyDc/ABd+oy65LCsT4pQBEOcNBvXursZmdZTsQPjoIZ6v6OvE9yGQX5DuKUvLghjUH2JQf/DaDeAvvwYXfgM559uYFwfpkBago3qA+vaCGNRfS5IhgMjmphRq/EAd7gGoZXPYs971WwbguuBlqyIn66xaC163EXAcYMfOSC+RngY0bwY66ACgxUGgrh1/T9HWiZRwTh4GXrlWv28PqbM9AHuUkhEzlgXq2M7TcbsK5IxZKdf4AT+nQf2mpFTrOQZJTTgM+cjzfqvwhLobAIDe6ckkRr72HnhV6j39gboeAEWpM53nFbx2A9xHX/BbhmfU6QCQH2ku2ZJsSAn3zodSeqhYpwOAf14O/vpbv2UEFvnkKyn/71OnAwBAZH9CilY8SAQuKIL75Mt+y/AcAaDCbxF+wnMXQE6Z4beMQMGLl8G54e6491cnERUCwHa/VfiNe/9jYM0n3AcVXrcR7hW3erZ1NWCUCgAlfqvwnR074d4wFthd5rcSX+F1G+EOuwG8abPfUnRRKgDUmW9bE/zjUjij7k65XJdo4RVrIo1/3Ua/peiDIgGQ2K6SFIK//BruyP8DKir9lqIVXvgTnAtH1q3GD4CZNgoQfvBbSJCQnxfCuebOlJ773hv5/sdwht0AbK17r4JEcokgxkK/hQQNLiiKPBHXbvBbindUhuGOfxTurfcB5XV0IpBpibDL3f8CqNtvf1XAPy6Fc9YV4Nn/9VuKcnjxMjjnXgn56mS/pfgKCSwhAKjIyfuYwIP8FhRIiCAuGALr9muDW/cnWirDkM+9DvfpV1Oy0nOMyJBd2UwAgAB/7LeawMIM+dYHcE4fAfmp5kP/FML5RXAGj4A76UXT+AEAvIAWF20RAOCy+x8AJh+gBnj9Jrgj74Jz3jXged/7LSdq+PvFcEbcBOfyMeAVa/yWEyDocwCgX/9amZM7C0DyF73XARFoQF9YV14EOiqYJdJ57kK4z/4L/OXXJtepCoTk0+3lhdN+D4D2ucNBeMVPUckIde8CMexsiFMGaNucXi1l5ZDTv4hUnlBRejJ1KQmVuwfT2jllvwUAt+iVFc7KXAegkY/Ckpdfy5OcNhB0zJEx196PG9cFz5kHOe0LyI9nRTbTG2rj+bTigquAvYZAAFDRPnc8Ef7ij6YUIjMDom8vUF4fUK/DIxveLUuZeV63ETxnXqSsSsFcYLtJ54oFEtw/9HNhPvCHAOCufZuEK6yVABr4ISxlycoEHd4Z1LYVqOXBQKvmoBbNI71EdgMgPQ2U/nsZQ965C5AS2FUGbNgE3vgLeONmYMlyyIU/Apu3+vddkh4qDhXnd6Q9kz70x48rcnIfJOAO/cIMBg0wrk5bVvDcr3/db0dYml05ESAFh+0aDMGCgLUharDPRM9+AUCLi7aAcac+WQaDHpgwgYqn75P4VOWe4NCy/BcBfK1FlcGgh2WhsP3cH39YZQAQIAExEoBZMzekBELyKFo5a78c92qrQqQVz/6OiMyUqCHpIcIUe3nhtKo+q7Esir00fyIYn3kjy2DQwrawFDdW92GNAUCADKXRcADxnUFqMPgLM+iyrGWzq80CrLUwFv2UvwGSBwNIrcOhDHUAfjS9OP+Dmq6IqjJc2vLCuQxcCiDlKyUZUgRGfih9e60LulGXRkwvLniXiMz6gCEZ+CEUxpm0aFGt5T1iqg0aWpr/d5MmYQgyBKx1JU6n1QXbork+5uK4oeKCvxH4rtilGQyes9qVOCFzecHqaG+Iqzp0qLjwQYBGw7wTGILDD45w+2UsL4jp2J/9skFjoTwn9wwBvA6TPm3wE0Z+KIwzox327E1C5wNkFBdMZZb9AKxIxI7BECcMxmOhjG0nxtP4gQR7gN9UdO3bJFxhPwXwBSrsGQxRsI1Bl9U2z18bSgLgVyra511IxE8CaKLSrsGwN0SYEpbixppWeKO2pULQ3uzqdGyLkCv+DvBFXtg31GmWCcmjqktsiwfPGmhlu2N7Q9BEmFpDhgQhYC0TJobC9rNVpTQnaNtbnPbHnuqSuInAJ+nwZ0glqBjME0IZ216OZlU3Lg9eGK2Kio59O5O0rgcwDKb2kKF6tgN4lwS/Zv9cWEAel+zU/kTmXr1CTmnmccw8BExDALTRrcEQKCTACwD6QkieacnQ56qHOTXh+5CkrF1uaxLoYTG6g9CDgUMANGKgEUV6igy/NRoSohLATkSe7KUM2kTAzwAvJoEltqj8jhYX+VaF5P8BURa5H85zX/YAAAAASUVORK5CYII=";
+    const iconAny512 = "data:image/png;base64,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";
+    const iconMaskable512 = "data:image/png;base64,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";
+    const manifest = {
+      name: 'MYLO', short_name: 'MYLO', description: 'Radio, YouTube & your own library, in one place.',
+      start_url: '.', scope: '.', display: 'standalone', orientation: 'any',
+      background_color: '#050505', theme_color: '#050505', categories: ['music', 'entertainment'],
+      icons: [
+        { src: iconAny192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: iconAny512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: iconMaskable512, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+      shortcuts: [
+        { name: 'Radio', short_name: 'Radio', url: '.?view=radio', icons: [{ src: iconAny192, sizes: '192x192', type: 'image/png' }] },
+        { name: 'Library', short_name: 'Library', url: '.?view=library', icons: [{ src: iconAny192, sizes: '192x192', type: 'image/png' }] },
+      ],
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    document.getElementById('app-manifest').href = URL.createObjectURL(blob);
+  } catch (e) { /* manifest is a nice-to-have, never block app load */ }
+}
+window.addEventListener('DOMContentLoaded', () => {
+  initAuth();
+  updateAccountSheet();
+  setupManifest();
+  checkInstallVisibility();
+  setupMediaSession();
+});
+
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('[MYLO] Service worker registered — offline support is active, and Chrome can now offer to install this app on desktop.'))
+      .catch((err) => console.warn('[MYLO] No service worker (sw.js) found alongside this file — that\'s fine, the app still works, but Chrome will not offer the native "Install" app prompt without it. Deploy sw.js in the same folder to enable it.', err && err.message));
+  });
+} else {
+  console.warn('[MYLO] This browser has no service worker support — offline caching and the desktop "Install" prompt are unavailable here.');
+}
