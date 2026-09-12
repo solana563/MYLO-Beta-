@@ -304,6 +304,114 @@
   nav.app-bottom-nav .nav-item:active { transform: scale(0.92); }
   @media (min-width: 900px) { .nav-active-pill { border-radius: 12px; } }
 
+  /* Line-art nav icons (replaces solid Font Awesome glyphs in the bottom nav) */
+  .nav-icon-wrap { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+  .nav-icon-wrap svg {
+    width: 100%; height: 100%;
+    stroke-width: 2;
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), stroke-width 0.3s ease, filter 0.3s ease;
+  }
+  .nav-item.active .nav-icon-wrap svg {
+    stroke-width: 2.4;
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 6px rgba(250,36,60,0.45));
+  }
+  html.light .nav-item.active .nav-icon-wrap svg { filter: drop-shadow(0 0 5px rgba(250,36,60,0.3)); }
+  @media (min-width: 900px) { .nav-icon-wrap { width: 19px; height: 19px; } }
+
+  /* ============ LIQUID GLASS — extended to the rest of the shell ============ */
+
+  /* Header: brighter aqua top-sheen + a hairline glass edge so it reads clearly */
+  header.glass {
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(255,255,255,0.05);
+  }
+  header.glass::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 75%);
+    pointer-events: none;
+  }
+  html.light header.glass {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  html.light header.glass::after { background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 75%); }
+
+  /* Mini player: full liquid shell to match the nav bar it sits above */
+  #mini-player {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 20px 45px -18px rgba(0,0,0,0.55),
+      inset 0 2px 3px -1px rgba(255,255,255,0.25),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.05),
+      inset 0 0 0 1px rgba(255,255,255,0.12) !important;
+  }
+  html.light #mini-player {
+    box-shadow:
+      0 20px 45px -18px rgba(0,0,0,0.15),
+      inset 0 2px 3px -1px rgba(255,255,255,0.8),
+      inset 0 -2px 4px -1px rgba(255,255,255,0.4),
+      inset 0 0 0 1px rgba(0,0,0,0.06) !important;
+  }
+  #mini-player::before {
+    content: '';
+    position: absolute; top: 1px; left: 1px; right: 1px; height: 55%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+
+  /* Bottom sheets: aqua top reflection — only visible once a sheet is actually open
+     (menu / queue / sleep timer / add-to-playlist / country / account / edit-track) */
+  .sheet { position: relative; overflow: hidden; }
+  .sheet::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 140px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+  }
+  html.light .sheet::before { background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%); }
+
+  /* Glossy bevel on the primary WHITE circular play controls (Now Playing, hero,
+     featured-radio, live-preview). These sit on a solid white/black button, so a
+     white highlight on top would be invisible — instead the "glass" reads as a
+     convex bevel: a bright hairline at the top edge and a soft shaded arc at the
+     bottom, the way light wraps around a rounded glass dome. */
+  #np-playpause, .hero-play, .radio-feat-play, .live-preview-play {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 10px 24px -8px rgba(0,0,0,0.45),
+      inset 0 1px 1px rgba(255,255,255,0.95),
+      inset 0 -5px 10px rgba(0,0,0,0.16) !important;
+  }
+  #np-playpause::before, .hero-play::before, .radio-feat-play::before, .live-preview-play::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 45%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.10) 100%);
+    pointer-events: none;
+  }
+
+  /* Active chip/tab pills (video categories, library tabs) — same bevel treatment
+     as the play buttons above, since they're also solid-white when active. */
+  .video-cat.bg-white, .lib-tab.bg-white {
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow:
+      0 6px 16px -6px rgba(0,0,0,0.35),
+      inset 0 1px 1px rgba(255,255,255,0.95),
+      inset 0 -3px 6px rgba(0,0,0,0.12);
+  }
+  .video-cat.bg-white::before, .lib-tab.bg-white::before {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 55%;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 100%);
+    pointer-events: none;
+  }
+
   #yt-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
   #yt-player-wrap iframe { width: 100%; height: 100%; }
 </style>
@@ -731,23 +839,23 @@
     <div class="nav-glare" id="nav-glare"></div>
     <div class="nav-active-pill" id="nav-active-pill"></div>
     <button data-view="explore" class="nav-item active flex flex-col items-center gap-1 text-accentRed flex-1" aria-label="Listen Now">
-      <i class="fa-solid fa-play text-xl"></i>
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg></span>
       <span class="text-[10px] font-bold">Listen Now</span>
     </button>
     <button data-view="discover" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Explore">
-      <i class="fa-solid fa-compass text-xl"></i>
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></span>
       <span class="text-[10px] font-medium">Explore</span>
     </button>
     <button data-view="video" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Videos">
-      <i class="fa-brands fa-youtube text-xl"></i>
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"></path><rect x="2" y="6" width="14" height="12" rx="2" ry="2"></rect></svg></span>
       <span class="text-[10px] font-medium">Videos</span>
     </button>
     <button data-view="radio" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Radio">
-      <i class="fa-solid fa-tower-broadcast text-xl"></i>
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path></svg></span>
       <span class="text-[10px] font-medium">Radio</span>
     </button>
     <button data-view="library" class="nav-item flex flex-col items-center gap-1 text-textSecondary flex-1" aria-label="Library">
-      <i class="fa-solid fa-layer-group text-xl"></i>
+      <span class="nav-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6 4 14"></path><path d="M12 6v14"></path><path d="M8 8v12"></path><path d="M4 4v16"></path></svg></span>
       <span class="text-[10px] font-medium">Library</span>
     </button>
   </nav>
