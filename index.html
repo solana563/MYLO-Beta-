@@ -428,8 +428,8 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
 .cloudbox b.em2{display:block;font-size:16px;font-weight:600;margin-bottom:4px;word-break:break-all}
 #ytw{position:absolute;z-index:8;background:#000;overflow:hidden;border-radius:18px;box-shadow:0 10px 34px rgba(0,0,0,.45)}
 #ytw[hidden]{display:none}#ytw iframe{width:100%;height:100%;border:0;display:block}
-#ytw.dock{border-radius:0 0 22px 22px}
-#app.yt-dock #view::before{content:"";display:block;height:var(--yth,0px);margin-bottom:14px}
+#ytw{border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.55)}#ytw iframe{position:absolute!important;left:0;top:50%;width:100%!important;height:56.25%!important;transform:translateY(-50%)}#ytw.away{visibility:hidden;box-shadow:none}
+
 .hubg{grid-template-columns:1fr 1fr}@media (min-width:600px){.hubg{grid-template-columns:repeat(4,1fr)}}@media (min-width:1100px){.hubg{grid-template-columns:repeat(4,1fr);max-width:1000px}}
 
 /* visualiser, quieter: motes rising from the arch of the header */
@@ -490,6 +490,12 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
  #mini{transition:transform .45s ease,opacity .45s ease}
  #app.imfs #mini{transform:translateY(105%);opacity:0;pointer-events:none}#app.imfs #im{bottom:0}
 }
+#app[data-tv]{zoom:var(--tvz,1.4);cursor:none;max-width:none;width:calc(100vw / var(--tvz,1.4));height:calc(100vh / var(--tvz,1.4))}
+#app[data-tv] button:focus,#app[data-tv] [tabindex]:focus,#app[data-tv] input:focus,#app[data-tv] label:focus-within{outline:4px solid #fff;outline-offset:3px;box-shadow:0 0 0 9px rgba(255,255,255,.2);transition:transform .15s;position:relative;z-index:3}
+#app[data-tv] [data-i]:focus,#app[data-tv] .tile:focus{transform:scale(1.03)}
+#app[data-tv] .imh,#app[data-tv] #imX{display:none}#app[data-tv] #imL2{left:26px}
+@media (min-width:860px){#mini #mT{color:#f3ede0}#mini #mA{color:#b9b2a5}}
+@media (min-width:860px){#app:has(#mini[hidden]){--pbh:0px}main,#sheet,nav,#hd,#im{transition:bottom .35s ease}}
 </style>
 </head>
 <body>
@@ -708,7 +714,7 @@ function setShuf(){S.shuf=!S.shuf;if(S.cur>=0&&S.base.length){if(S.shuf){S.q=shu
 function qIns(i,nx){if(S.cur<0){play(i);return}if(nx)S.q.splice(S.qi+1,0,i);else S.q.push(i)}
 function toggleLike(i){const t=T[i],k=t.key;let on;if(S.likes.has(k)){S.likes.delete(k);on=0}else{S.likes.add(k);on=1}
   if(t.stream&&on)rememberStream(i);
-  if(t.radio){S.rfav=S.rfav.filter(x=>x.id!==t.sid);if(on)S.rfav.push({id:t.sid,name:t.t,url:t.url,country:t.country,tag:t.g,logo:t.logo})}
+  if(t.radio){S.rfav=S.rfav.filter(x=>x.id!==t.sid);if(on)S.rfav.push({id:t.sid,name:t.t,url:t.url,country:t.country,tag:t.g,logo:t.logo,home:t.home||"",lg:t.lg?1:0,c:t.lg?t.c:undefined})}
   toast(t.radio?(on?"Station saved":"Station removed"):(on?"Added to Liked songs":"Removed from Liked songs"));
   save();updCtl();if(S.nav==="pl:liked"||(S.tab==="Home"&&!S.nav))render();else if(S.tab==="Discover"){refreshR();refreshM()}}
 function updCtl(){$("shf").classList.toggle("on",S.shuf);const r=$("rep");r.classList.toggle("on",S.rep>0);r.innerHTML=svg(I.rep)+(S.rep===2?'<b class="bd">1</b>':"");$("dsh").classList.toggle("on",S.shuf);const r2=$("drp");r2.classList.toggle("on",S.rep>0);r2.innerHTML=r.innerHTML;
@@ -717,7 +723,7 @@ function updCtl(){$("shf").classList.toggle("on",S.shuf);const r=$("rep");r.clas
 
 /* ---------- sync UI with current track ---------- */
 function bgArt(t){const c=t.c;S.bl=1-(S.bl||0);const n=S.bl;
-  const css=t.img?artOf(t):`radial-gradient(circle at 25% 20%,rgba(${c},1),transparent 55%),radial-gradient(circle at 80% 55%,rgba(${c},.75),transparent 55%),${art(c)}`;
+  const css=t.img?artOf(t):t.radio&&t.logo&&t.lg?`center/34% no-repeat url(${t.logo}),radial-gradient(circle at 25% 20%,rgba(${c},1),transparent 55%),radial-gradient(circle at 80% 55%,rgba(${c},.75),transparent 55%),${art(c)}`:`radial-gradient(circle at 25% 20%,rgba(${c},1),transparent 55%),radial-gradient(circle at 80% 55%,rgba(${c},.75),transparent 55%),${art(c)}`;
   document.querySelectorAll("#hd,#sheet,#full,#lyr,#im").forEach(el=>{const L=el.querySelectorAll(".bl");L[n].style.background=css;L[n].style.opacity=1;L[1-n].style.opacity=0})}
 function swatch(t){const im=new Image();im.crossOrigin="anonymous";im.onload=()=>{try{const c=document.createElement("canvas");c.width=c.height=24;const x=c.getContext("2d");x.drawImage(im,0,0,24,24);const d=x.getImageData(0,0,24,24).data;let r=0,g=0,b=0,w=0;
   for(let i=0;i<d.length;i+=4){const mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]),s=(mx-mn)/(mx||1),k=.15+s*s;r+=d[i]*k;g+=d[i+1]*k;b+=d[i+2]*k;w+=k}
@@ -725,7 +731,7 @@ function swatch(t){const im=new Image();im.crossOrigin="anonymous";im.onload=()=
 function sync(){
   const t=T[S.cur];if(!t)return;S.lastIdx=S.cur;
   $("mini").hidden=false;$("app").style.setProperty("--acc",acc(t.c));applyWash();
-  if(S.bgCur!==S.cur){S.bgCur=S.cur;S.lis=0;S.cnt=0;if(IM.on)imRender();bgArt(t);glowSet(t);lyrRender();meta(t);autoLyrics();if(t.img&&!t.sw){t.sw=1;swatch(t)}}
+  if(S.bgCur!==S.cur){S.bgCur=S.cur;S.lis=0;S.cnt=0;if(IM.on)imRender();bgArt(t);glowSet(t);lyrRender();meta(t);autoLyrics();if(t.img&&!t.sw){t.sw=1;swatch(t)}if(t.radio&&!t.artDone&&!t.lg)stationArt(t)}
   $("mArt").style.background=artOf(t);$("mT").textContent=t.t;$("mA").textContent=t.a;
   $("big").style.background=artOf(t);$("fT").textContent=t.t;$("fA").textContent=t.a;$("fM").textContent=[t.al,t.y,t.g,t.lic].filter(Boolean).join(" · ");
   $("fD").textContent=$("dD").textContent=$("lyD").textContent=t.radio?"LIVE":fmt(t.d);$("seek").style.visibility=t.radio?"hidden":"visible";
@@ -846,7 +852,7 @@ function libV(){let h=`<h1 style="margin-top:20px">Your library</h1><div>${addBt
   else h+=`<button class="ghost" data-np style="margin-bottom:14px">+ New playlist</button><div class="list">${plRow("liked","Liked songs",likedIdx())}${S.pls.map(p=>plRow(p.id,p.name,plIdx(p))).join("")}</div>`;
   return h}
 const demoRow=i=>`<div class="li"><i style="background:${artOf(T[i])}"></i><span><b>${esc(T[i].t)}</b><small>${esc(T[i].a)} · ${T[i].hid?"In the demo folder":"In your library"}</small></span><button class="dm" data-demo="${i}">${T[i].hid?"Add":"Remove"}</button></div>`;
-const profV=()=>`<h1 style="margin-top:20px">Profile</h1>${acctCard()}<div class="row" style="margin-top:6px"><h2>Cloud sync</h2></div>${cloudHtml()}<div class="row" style="margin-top:6px"><h2>Insights &amp; tools</h2></div><div class="tools"><button data-tool="ins">Listening insights</button><button data-tool="bkx">Back up</button><label>Restore<input type="file" accept=".json,application/json" data-bk hidden></label><button data-tool="keys">Shortcuts</button></div><div class="row" style="margin-top:6px"><h2>Background</h2></div><div class="seg">${["light","dark","auto"].map(m=>`<button data-th="${m}" class="${S.th===m?"on":""}">${m[0].toUpperCase()+m.slice(1)}</button>`).join("")}</div>
+const profV=()=>`<h1 style="margin-top:20px">Profile</h1>${acctCard()}<div class="row" style="margin-top:6px"><h2>Cloud sync</h2></div>${cloudHtml()}<div class="row" style="margin-top:6px"><h2>Insights &amp; tools</h2></div><div class="tools"><button data-tool="ins">Listening insights</button><button data-tool="bkx">Back up</button><label>Restore<input type="file" accept=".json,application/json" data-bk hidden></label><button data-tool="keys">Shortcuts</button><button data-tool="tv">${tvOn()?"TV mode: on":"TV mode: off"}</button></div><div class="row" style="margin-top:6px"><h2>Background</h2></div><div class="seg">${["light","dark","auto"].map(m=>`<button data-th="${m}" class="${S.th===m?"on":""}">${m[0].toUpperCase()+m.slice(1)}</button>`).join("")}</div>
   <div class="row" style="margin-top:24px"><h2>Text contrast</h2></div><div class="seg"><button data-hcb="0" class="${S.hc?"":"on"}">Standard</button><button data-hcb="1" class="${S.hc?"on":""}">High</button></div>
   <div class="row" style="margin-top:24px"><h2>Sound &amp; playback</h2></div><button class="ghost" data-snd>EQ, crossfade &amp; gapless</button>
   ${installHtml()}${stgHtml()}
@@ -1026,7 +1032,7 @@ const vis=()=>T.map((t,i)=>t.hid?-1:i).filter(i=>i>=0);
 const RC=["84,120,140","150,100,130","110,140,110","170,110,90","120,110,160","201,151,90"];
 function addStation(s){let i=T.findIndex(t=>t.key==="radio:"+s.id);if(i>=0){if(s.logo&&!T[i].logo)T[i].logo=s.logo;return i}
   const c=RC[[...s.id].reduce((a,ch)=>(a*31+ch.charCodeAt(0))>>>0,7)%6];
-  T.push({t:s.name,a:s.country||"Live radio",country:s.country,al:"Live radio",g:s.tag||"",y:"",d:0,c,url:s.url,logo:s.logo||"",radio:true,hid:true,sid:s.id,key:"radio:"+s.id});return T.length-1}
+  T.push({t:s.name,a:s.country||"Live radio",country:s.country,al:"Live radio",g:s.tag||"",y:"",d:0,c,url:s.url,logo:s.logo||"",home:s.home||"",lg:!!s.lg,needArt:!s.lg,radio:true,hid:true,sid:s.id,key:"radio:"+s.id});if(s.c)T[T.length-1].c=s.c;return T.length-1}
 S.rfav.forEach(addStation);S.sfav.forEach(addStream);
 const RS=["https://de1.api.radio-browser.info","https://at1.api.radio-browser.info","https://nl1.api.radio-browser.info"];
 async function jget(u,ms=9000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw new Error(r.status);return await r.json()}finally{clearTimeout(t)}}
@@ -1042,7 +1048,8 @@ function refreshR(){if(S.tab!=="Discover"||S.dm!=="radio"||S.nav)return;const r=
 async function radioGo(qs,label){S.rc=label;S.rload=1;S.rerr="";refreshR();
   try{const a=await radioFetch(qs),seen=new Set();
     S.rs=a.filter(x=>{const n=(x.name||"").trim().toLowerCase();if(!x.url_resolved||!x.url_resolved.startsWith("https:")||x.hls||!n||seen.has(n))return false;seen.add(n);return true}).slice(0,40)
-      .map(x=>addStation({id:x.stationuuid,name:x.name.trim(),url:x.url_resolved,country:x.country,tag:(x.tags||"").split(",")[0],logo:(x.favicon||"").replace(/^http:/,"https:")}));
+      .map(x=>addStation({id:x.stationuuid,name:x.name.trim(),url:x.url_resolved,country:x.country,tag:(x.tags||"").split(",")[0],logo:(x.favicon||"").replace(/^http:/,"https:"),home:x.homepage||""}));
+    artScan();
     if(!S.rs.length)S.rerr="No stations found. Try another search."}
   catch(e){S.rs=[];S.rerr="Couldn't reach the radio directory. Hosted pages can block outside connections, so try the downloaded file."}
   S.rload=0;refreshR()}
@@ -1793,22 +1800,19 @@ function ytState(e){const t=T[S.cur];if(!t||!t.yt)return;const d=e.data;
   if(d===0)next(true);
   else if(d===1&&!S.playing){S.playing=true;sync()}
   else if(d===2&&S.playing&&!YTX.busy){S.playing=false;sync()}}
-function ytPlay(t,tog){DK.forEach(e=>e.pause());RA.pause();RB.pause();audioStop();A=RA;const w=$("ytw");w.hidden=false;ytPlaceSoon();
+function ytPlay(t,tog){DK.forEach(e=>e.pause());RA.pause();RB.pause();audioStop();A=RA;const w=$("ytw");w.hidden=false;ytPlaceSoon();if(!IM.on&&!$("full").classList.contains("open")&&!$("lyr").classList.contains("open")){if(mqDesk.matches)imOpen();else openFull()}
   ytLoad().then(()=>{if(T[S.cur]!==t)return;
     if(!YTX.p){YTX.p=new window.YT.Player("ytp",{width:"100%",height:"100%",videoId:t.yt,playerVars:{playsinline:1,rel:0,autoplay:S.playing?1:0,origin:/^https?:/.test(location.protocol)?location.origin:undefined},
       events:{onReady:()=>{YTX.ready=1;YTX.vid=t.yt;const c=T[S.cur];try{YTX.p.setVolume(Math.round((S.vol==null?1:S.vol)*100))}catch(e){}if(c&&c.yt){if(c.yt!==YTX.vid){YTX.vid=c.yt;YTX.p.loadVideoById(c.yt)}ytApply()}},
         onStateChange:ytState,onError:()=>toast("YouTube won't play this video here. The owner may have turned embedding off.")}});YTX.vid=t.yt}
     else if(YTX.ready){if(!tog||YTX.vid!==t.yt){YTX.vid=t.yt;YTX.busy=1;S.playing?YTX.p.loadVideoById(t.yt):YTX.p.cueVideoById(t.yt);setTimeout(()=>{YTX.busy=0},900)}else ytApply()}})
   .catch(()=>{toast("YouTube can't load here. Hosted previews block it, so use the installed app.");w.hidden=true;ytPlace();S.playing=false;sync()})}
-function ytPlace(){const w=$("ytw"),app=$("app");if(!w)return;
-  if(w.hidden){app.classList.remove("yt-dock");return}
-  const ar=app.getBoundingClientRect(),io=IM.on,fo=$("full").classList.contains("open"),lo=$("lyr").classList.contains("open");let L,Tp,W,H;
-  if(io){const r=document.querySelector("#im .imart").getBoundingClientRect();W=Math.min(r.width,ar.width-24);H=Math.max(200,Math.round(W*9/16));L=r.left-ar.left+(r.width-W)/2;Tp=r.top-ar.top+(r.height-H)/2;w.classList.remove("dock");app.classList.remove("yt-dock")}
-  else if(fo){const r=document.querySelector("#full .artw").getBoundingClientRect();W=Math.min(r.width,ar.width-24);H=Math.max(200,Math.round(W*9/16));L=r.left-ar.left+(r.width-W)/2;Tp=r.top-ar.top+(r.height-H)/2;w.classList.remove("dock");app.classList.remove("yt-dock")}
-  else if(lo){W=Math.min(356,ar.width-20);H=Math.max(200,Math.round(W*9/16));L=(ar.width-W)/2;Tp=64;w.classList.remove("dock");app.classList.remove("yt-dock")}
-  else{const m=$("view"),mr=m.getBoundingClientRect(),pt=parseFloat(getComputedStyle(m).paddingTop)||0;W=Math.min(mr.width,720);H=Math.max(200,Math.min(260,Math.round(W*9/16)));L=mr.left-ar.left+(mr.width-W)/2;Tp=mr.top-ar.top+pt;w.classList.add("dock");app.style.setProperty("--yth",H+"px");app.classList.add("yt-dock")}
-  w.style.cssText+=`;left:${L}px;top:${Tp}px;width:${W}px;height:${H}px;right:auto;bottom:auto;transform:none`}
-function ytPlaceSoon(){ytPlace();setTimeout(ytPlace,120);setTimeout(ytPlace,520)}
+function ytPlace(){const w=$("ytw"),app=$("app");if(!w)return;app.classList.remove("yt-dock");if(w.hidden)return;
+  const ar=app.getBoundingClientRect(),io=IM.on,fo=$("full").classList.contains("open");let el=null;
+  if(io)el=document.querySelector("#im .imart");else if(fo)el=document.getElementById("big");
+  if(el){const r=el.getBoundingClientRect();w.classList.remove("away");w.style.cssText+=`;left:${r.left-ar.left}px;top:${r.top-ar.top}px;width:${r.width}px;height:${r.height}px;right:auto;bottom:auto;transform:none`}
+  else{w.classList.add("away");w.style.cssText+=";left:-400px;top:0;width:240px;height:240px;right:auto;bottom:auto;transform:none"}}
+function ytPlaceSoon(){ytPlace();[120,520,1000,1500].forEach(d=>setTimeout(ytPlace,d))}
 ["full","lyr","im"].forEach(id=>{const e=$(id);if(e)new MutationObserver(ytPlaceSoon).observe(e,{attributes:true,attributeFilter:["class"]})});
 addEventListener("resize",ytPlaceSoon);
 function ytStop(){try{if(YTX.ready)YTX.p.pauseVideo()}catch(e){}const w=$("ytw");if(w)w.hidden=true;ytPlace()}
@@ -1887,10 +1891,68 @@ function shareTrack(i){const t=T[i],txt=t.t+(t.a?" — "+t.a:"")+" · on milo.",
   const s=url?txt+"\n"+url:txt;try{navigator.clipboard.writeText(s).then(()=>toast("Copied to clipboard"),()=>toast(s))}catch(e){toast(s)}}
 function backupOut(){try{const o=LS.get(dkey(),{}),b=new Blob([JSON.stringify({milo:2,at:Date.now(),data:o},null,1)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="milo-backup-"+dayKey()+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast("Backup saved. Songs you uploaded are not included.")}catch(e){toast("Couldn't create the backup")}}
 function backupIn(f){const r=new FileReader();r.onload=()=>{try{const j=JSON.parse(r.result);if(!j||j.milo!==2||!j.data)throw 0;LS.set(dkey(),j.data);loadData();save();render();toast("Backup restored")}catch(e){toast("That isn't a milo. backup file")}};r.readAsText(f)}
-function keysM(){const R=[["Space","Play / pause"],["← →","Seek 5 s"],["Shift + ← →","Previous / next"],["N / P","Next / previous"],["S","Shuffle"],["R","Repeat"],["L","Lyrics"],["F","Full-screen now playing"],["M","Mute"],["+ / −","Volume"],["/","Search"],["?","This list"]];
+function keysM(){const R=[["Space","Play / pause"],["← →","Seek 5 s"],["Shift + ← →","Previous / next"],["N / P","Next / previous"],["S","Shuffle"],["R","Repeat"],["L","Lyrics"],["F","Full-screen now playing"],["M","Mute"],["+ / −","Volume"],["/","Search"],["?","This list"],["TV remote","Arrows move, OK selects, Back goes back"]];
   modal(`<h3>Keyboard shortcuts</h3><div class="kbd">${R.map(([k,v])=>`<kbd>${k}</kbd><span>${v}</span>`).join("")}</div>`)}
 $("view").addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-tool]");if(!b)return;const k=b.dataset.tool;if(k==="ins")insightsM();else if(k==="bkx")backupOut();else if(k==="keys")keysM()});
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.dataset&&t.dataset.bk&&t.files&&t.files[0]){backupIn(t.files[0]);t.value=""}});
+
+/* ---------- station art: find the best logo, tint the app from it ---------- */
+var SA={q:[],n:0,rt:0};
+const hostOf=u=>{try{return new URL(/^https?:/.test(u)?u:"http://"+u).hostname.replace(/^www\./,"")}catch(e){return""}};
+function loadImg(u,min){return new Promise(res=>{const go=cors=>{const im=new Image();let d=0;const f=ok=>{if(d)return;d=1;if(ok&&im.naturalWidth>=min&&im.naturalHeight>=min)res({im,cors,w:im.naturalWidth});else if(cors)go(false);else res(null)};im.onload=()=>f(1);im.onerror=()=>f(0);setTimeout(()=>f(0),7000);if(cors)im.crossOrigin="anonymous";im.referrerPolicy="no-referrer";im.src=u};go(true)})}
+function artCands(t){const h=hostOf(t.home),o=[];if(t.logo)o.push([t.logo,24]);
+  if(h)o.push([`https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent("https://"+h)}&size=256`,64],[`https://icons.duckduckgo.com/ip3/${h}.ico`,32],[`https://${h}/apple-touch-icon.png`,96],[`https://${h}/favicon.ico`,32]);
+  return o}
+function logoColor(im){try{const c=document.createElement("canvas");c.width=c.height=32;const x=c.getContext("2d");x.drawImage(im,0,0,32,32);const d=x.getImageData(0,0,32,32).data;let r=0,g=0,b=0,w=0;
+  for(let i=0;i<d.length;i+=4){if(d[i+3]<60)continue;const mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]);if(mn>238||mx<22)continue;const s=(mx-mn)/(mx||1),k=.05+s*s*s;r+=d[i]*k;g+=d[i+1]*k;b+=d[i+2]*k;w+=k}
+  return w>0?[r,g,b].map(v=>Math.round(v/w)).join(","):null}catch(e){return null}}
+async function stationArt(t){if(!t||!t.radio||t.artDone)return;t.artDone=1;
+  const rs=await Promise.all(artCands(t).map(([u,m])=>loadImg(u,m).then(r=>r&&{...r,u})));
+  const ok=rs.filter(Boolean);if(!ok.length)return;ok.sort((a,b)=>b.w-a.w);const best=ok[0];
+  t.logo=best.u;t.lgw=best.w;t.lg=1;let col=null;for(const x of [best,...ok]){if(x.cors){col=logoColor(x.im);if(col)break}}
+  if(col)t.c=col;
+  const f=S.rfav.find(x=>x.id===t.sid);if(f){f.logo=t.logo;f.home=t.home;f.lg=1;if(col)f.c=col;save()}
+  if(T[S.cur]===t){bgArt(t);glowSet(t);sync();if(IM.on)imRender()}
+  else{clearTimeout(SA.rt);SA.rt=setTimeout(()=>{refreshR()},700)}}
+function artScan(){T.forEach(t=>{if(t.radio&&t.needArt&&!t.artDone&&!t.lg&&!SA.q.includes(t))SA.q.push(t)});artPump()}
+function artPump(){while(SA.n<3&&SA.q.length){const t=SA.q.shift();SA.n++;stationArt(t).catch(()=>{}).finally(()=>{SA.n--;artPump()})}}
+artScan();
+
+/* ---------- smart TV: 10-foot layout, remote-control keys, D-pad focus ---------- */
+var TVUA=/Tizen|Web0S|WebOS|SMART-TV|SmartTV|Android TV|AFTM|AFTT|AFTS|AFTB|BRAVIA|VIDAA|HbbTV|CrKey|GoogleTV|PhilipsTV|NetCast|Large Screen/i;
+function tvOn(){const q=location.search.match(/[?&]tv=(\d)/);if(q)LS.set("milo.tv",q[1]==="1");const m=LS.get("milo.tv",null);return m!==null?!!m:TVUA.test(navigator.userAgent)}
+function tvApply(){const on=tvOn(),a=$("app");a.toggleAttribute("data-tv",on);a.style.setProperty("--tvz",Math.max(1,Math.min(2,innerWidth/1280)).toFixed(2));S.tv=on;
+  if(on){tvMark();try{if(window.tizen&&tizen.tvinputdevice)["MediaPlayPause","MediaPlay","MediaPause","MediaStop","MediaFastForward","MediaRewind","MediaTrackNext","MediaTrackPrevious","ColorF0Red","ColorF1Green"].forEach(k=>{try{tizen.tvinputdevice.registerKey(k)}catch(e){}})}catch(e){}}}
+const TVSEL='button:not([disabled]),a[href],input:not([type=file]):not([type=hidden]),[tabindex="0"],label.addb';
+function tvMark(){document.querySelectorAll("#view [data-i],#view [data-go],#view [data-mix],#view [data-hub],#view [data-nav],#view [data-lib],#view [data-np],#view [data-m],#view [data-acct],#view [data-si],#view [data-so],#view [data-back],.tile,.dc,.dc2").forEach(e=>{if(!e.hasAttribute("tabindex"))e.tabIndex=0})}
+function tvRoot(){return !$("mdl").hidden?$("mdl"):$("lyr").classList.contains("open")?$("lyr"):IM.on?$("im"):$("full").classList.contains("open")?$("full"):$("app")}
+function tvList(){const root=tvRoot();return [...root.querySelectorAll(TVSEL)].filter(e=>{if(e.closest("[hidden]"))return false;if(root===$("app")&&(e.closest("#full")||e.closest("#lyr")||e.closest("#im")||e.closest("#mdl")))return false;const r=e.getBoundingClientRect();if(r.width<4||r.height<4)return false;const cs=getComputedStyle(e);return cs.visibility!=="hidden"&&cs.display!=="none"&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth})}
+function tvMove(k){const els=tvList(),cur=document.activeElement;if(!cur||!els.includes(cur)){if(els[0])els[0].focus({preventScroll:true});return}
+  const c=cur.getBoundingClientRect(),cx=c.left+c.width/2,cy=c.top+c.height/2;let best=null,bs=1e9;
+  els.forEach(e=>{if(e===cur)return;const r=e.getBoundingClientRect(),dx=r.left+r.width/2-cx,dy=r.top+r.height/2-cy;let ok,p,o;
+    if(k==="ArrowRight"){ok=dx>4&&Math.abs(dy)<=Math.abs(dx)*1.6+c.height;p=dx;o=Math.abs(dy)}
+    else if(k==="ArrowLeft"){ok=dx<-4&&Math.abs(dy)<=Math.abs(dx)*1.6+c.height;p=-dx;o=Math.abs(dy)}
+    else if(k==="ArrowDown"){ok=dy>4&&Math.abs(dx)<=Math.abs(dy)*1.6+c.width;p=dy;o=Math.abs(dx)}
+    else{ok=dy<-4&&Math.abs(dx)<=Math.abs(dy)*1.6+c.width;p=-dy;o=Math.abs(dx)}
+    if(ok){const s=p+o*2;if(s<bs){bs=s;best=e}}});
+  if(best){best.focus({preventScroll:true});try{best.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"})}catch(e){}}}
+function tvBack(){if(!$("mdl").hidden)closeM();else if($("lyr").classList.contains("open"))$("lyr").classList.remove("open");else if(IM.on)imClose();else if($("full").classList.contains("open"))$("full").classList.remove("open");else if(S.nav){S.nav=null;render()}}
+addEventListener("keydown",e=>{if(!S.tv)return;const k=e.key,c=e.keyCode,tag=e.target&&e.target.tagName;
+  if(c===10009||c===461||k==="BrowserBack"||k==="GoBack"||(k==="Backspace"&&tag!=="INPUT"&&tag!=="TEXTAREA")){e.preventDefault();e.stopImmediatePropagation();tvBack();return}
+  if(k==="MediaPlayPause"||c===10252||c===415||c===19||k==="MediaPlay"||k==="MediaPause"){e.preventDefault();e.stopImmediatePropagation();if(S.cur>=0)toggle();return}
+  if(k==="MediaTrackNext"||c===10233){e.preventDefault();next(false);return}
+  if(k==="MediaTrackPrevious"||c===10232){e.preventDefault();prev();return}
+  if(k==="MediaFastForward"||c===417){e.preventDefault();if(S.cur>=0&&!T[S.cur].radio)seekTo(Math.min(T[S.cur].d||1e9,S.pos+15));return}
+  if(k==="MediaRewind"||c===412){e.preventDefault();if(S.cur>=0&&!T[S.cur].radio)seekTo(Math.max(0,S.pos-15));return}
+  if(k==="MediaStop"||c===413){e.preventDefault();if(S.playing)toggle();return}
+  if(e.target&&e.target.type==="range"&&(k==="ArrowLeft"||k==="ArrowRight"))return;
+  if(tag==="INPUT"&&e.target.type!=="range"&&e.target.type!=="checkbox"&&(k==="ArrowLeft"||k==="ArrowRight"))return;
+  if(k==="ArrowUp"||k==="ArrowDown"||k==="ArrowLeft"||k==="ArrowRight"){e.preventDefault();e.stopImmediatePropagation();if(IM.on||$("full").classList.contains("open")&&!document.activeElement.closest(".ctl,.fh,.ft,.sub"))return tvMove(k);tvMove(k);return}
+  if(k==="Enter"){const a=document.activeElement;if(a&&a!==document.body&&!/^(BUTTON|A|INPUT|TEXTAREA|SELECT|LABEL)$/.test(a.tagName)){e.preventDefault();a.click()}}},true);
+new MutationObserver(()=>{if(S.tv){clearTimeout(S.tvm);S.tvm=setTimeout(tvMark,80)}}).observe($("view"),{childList:true,subtree:true});
+addEventListener("resize",()=>{if(S.tv)tvApply()});
+$("view").addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-tool=tv]");if(!b)return;LS.set("milo.tv",!tvOn());tvApply();render();toast(tvOn()?"TV mode on. Use the arrow keys and OK on your remote.":"TV mode off")});
+tvApply();
 </script>
 </body>
 </html>
