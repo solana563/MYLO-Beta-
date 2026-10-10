@@ -507,6 +507,12 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
  #imX,#imL2{top:28px}#imX{left:36px}#imL2{left:128px}
  #app[data-tv] #imL2{left:36px}
 }
+.imact{display:flex;gap:10px;margin:2px 0 0}
+.imlk{display:inline-flex;align-items:center;gap:9px;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:10px 18px 10px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.imlk svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.imlk:hover{background:rgba(255,255,255,.24)}.imlk.on svg{fill:#1ed760;stroke:#1ed760}.imlk.on{border-color:rgba(30,215,96,.6)}
+#mLk{display:none}
+@media (min-width:860px){#mLk{display:inline-flex;margin-left:6px}#mLk.on{color:#1ed760}#mLk.on svg{fill:currentColor}}
 </style>
 </head>
 <body>
@@ -518,7 +524,7 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
   <div id="toast" role="status"></div>
   <main id="view"></main>
   <div id="mini" hidden>
-    <div class="mr"><i class="art" id="mArt"></i><div><b id="mT"></b><small id="mA"></small></div>
+    <div class="mr"><i class="art" id="mArt"></i><div><b id="mT"></b><small id="mA"></small></div><button class="ic" id="mLk" aria-label="Like this song"></button>
       <button class="pb" id="mP" aria-label="Play or pause"></button></div>
     <div class="bar"><i id="mB"></i></div>
     <div class="dk">
@@ -560,6 +566,7 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
       <div class="imi">
         <span class="imk" id="imK" style="--i:0">Now playing</span>
         <h2 id="imT" style="--i:1"></h2><p class="ima" id="imAr" style="--i:2"></p><p class="imal" id="imAl" style="--i:3"></p>
+        <div class="imact" style="--i:4"><button class="imlk" id="imLk" aria-label="Like this song"><span id="imLs"></span><span id="imLt">Like</span></button></div>
         <div class="ims" id="imS" style="--i:4"></div>
         <p class="iml" id="imL" style="--i:5"></p>
         <div class="imbar" style="--i:6"><div class="imb"><i id="imB"></i></div><div class="imt"><span id="imC">0:00</span><span id="imD">0:00</span></div></div>
@@ -730,7 +737,7 @@ function toggleLike(i){const t=T[i],k=t.key;let on;if(S.likes.has(k)){S.likes.de
   save();updCtl();if(S.nav==="pl:liked"||(S.tab==="Home"&&!S.nav))render();else if(S.tab==="Discover"){refreshR();refreshM()}}
 function updCtl(){$("shf").classList.toggle("on",S.shuf);const r=$("rep");r.classList.toggle("on",S.rep>0);r.innerHTML=svg(I.rep)+(S.rep===2?'<b class="bd">1</b>':"");$("dsh").classList.toggle("on",S.shuf);const r2=$("drp");r2.classList.toggle("on",S.rep>0);r2.innerHTML=r.innerHTML;
   $("spd").textContent=S.rate+"×";$("spd").classList.toggle("on",S.rate!==1);$("slp").classList.toggle("on",!!S.sleep);$("snd").classList.toggle("on",S.eqOn&&S.eq.n!=="Flat");
-  const t=T[S.cur];if(t)$("fL").classList.toggle("on",S.likes.has(t.key))}
+  const t=T[S.cur];if(t){const on=S.likes.has(t.key);$("fL").classList.toggle("on",on);$("imLk").classList.toggle("on",on);$("mLk").classList.toggle("on",on);$("imLt").textContent=t.radio?(on?"Saved":"Save station"):(on?"Liked":"Like");$("imLk").setAttribute("aria-pressed",on)}}
 
 /* ---------- sync UI with current track ---------- */
 function bgArt(t){const c=t.c;S.bl=1-(S.bl||0);const n=S.bl;
@@ -1068,7 +1075,7 @@ function radioBind(){const q=$("rq");let tm;
   q.oninput=()=>{clearTimeout(tm);S.rqv=q.value;tm=setTimeout(()=>{if(q.value.trim().length>1)radioGo("name="+encodeURIComponent(q.value.trim()),"Results")},450)};
   document.querySelectorAll("[data-rc]").forEach(b=>b.onclick=()=>{const c=RCHIPS.find(x=>x[0]===b.dataset.rc);q.value="";S.rqv="";radioGo(c[1],c[0])});
   if(!S.rs.length&&!S.rload&&!S.rerr&&!S.rtried){S.rtried=1;radioGo("","Top")}}
-const noLy=t=>t.radio?'<p class="none">Live radio has no lyrics.</p>':t.yt?'<p class="none">Lyrics aren\'t available for YouTube videos.</p>':t.url?'<p class="none">No lyrics in this song yet. Add a .lrc file with the same name, or look them up online.</p><button class="chip" data-fl style="margin-top:14px;flex:none;padding:10px 18px">Find lyrics online</button>':'<p class="none">No lyrics for this demo song.</p>';
+const noLy=t=>t.radio?'<p class="none">Live radio has no lyrics.</p>':(t.yt||t.url)?'<p class="none">No lyrics in this song yet. Add a .lrc file with the same name, or look them up online.</p><button class="chip" data-fl style="margin-top:14px;flex:none;padding:10px 18px">Find lyrics online</button>':'<p class="none">No lyrics for this demo song.</p>';
 /* ---------- smarter lyrics lookup ---------- */
 const FEAT1=/\s*[\(\[]\s*(feat\.?|ft\.?|featuring)\s[^\)\]]*[\)\]]/gi,FEAT2=/\s+(feat\.?|ft\.?|featuring)\s.+$/i;
 const lnorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/&/g," and ").replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim();
@@ -1080,20 +1087,21 @@ const ltok=s=>new Set(lnorm(s).split(" ").filter(w=>w.length>1));
 function sim(a,b){const A=ltok(a),B=ltok(b);if(!A.size||!B.size)return 0;let n=0;A.forEach(w=>{if(B.has(w))n++});return 2*n/(A.size+B.size)}
 function lyPick(cs,V,t){let best=null,bs=-9;
   for(const c of cs){if(c.instrumental||!(c.syncedLyrics||c.plainLyrics))continue;let s=-9;
-    for(const v of V){const ts=sim(c.trackName,v.t);if(ts<.5)continue;const as=v.a?sim(c.artistName,v.a):.3,df=t.d&&c.duration?Math.abs(c.duration-t.d):null;
+    for(const v of V){const ts=sim(c.trackName,v.t);if(ts<.5)continue;const as=v.a?sim(c.artistName,v.a):.3,df=t.d&&c.duration&&!t.yt?Math.abs(c.duration-t.d):null;
       if(v.a&&as<.3&&!(df!=null&&df<=4))continue;
       const sc=ts*3+(v.a?as*2:.6)+(df==null?0:df<=2?1.2:df<=5?.7:df<=12?.2:-.6);if(sc>s)s=sc}
     if(s<0)continue;if(c.syncedLyrics)s+=.35;if(s>bs){bs=s;best=c}}
   return bs>=2.4?best:null}
 async function lyLookup(t){
-  const a0=(t.a||"").split(/,\s*/)[0],ar=a0==="On this device"?"":lclean(a0),ti=lclean(t.t).replace(FEAT1,"").replace(FEAT2,"").trim()||t.t,base=lclean(t.fname||"");
-  const V=[{t:ti,a:ar}];
+  if(t.yt)await ytInfo(t);const yv=t.yt?ytVariants(t):null;
+  const a0=(t.a||"").split(/,\s*/)[0],ar=yv?yv.a:a0==="On this device"?"":lclean(a0),ti=lclean(yv?yv.t:t.t).replace(FEAT1,"").replace(FEAT2,"").trim()||t.t,base=yv?yv.base:lclean(t.fname||"");
+  const V=[{t:ti,a:ar}];if(yv&&t.tags)t.tags.filter(g=>g&&g.length<=32&&lnorm(g)!==lnorm(ti)).slice(0,4).forEach(g=>V.push({t:ti,a:lclean(g)}));
   if(base){const p=base.split(/\s+-\s+/);if(p.length>1){V.push({t:p.slice(1).join(" "),a:p[0]});V.push({t:p[0],a:p.slice(1).join(" ")})}else if(lnorm(base)!==lnorm(ti))V.push({t:base,a:""})}
   const L="https://lrclib.net/api/",e=encodeURIComponent;
   const run=async urls=>{const rs=await Promise.allSettled(urls.map(u=>jget(u)));if(rs.every(r=>r.status==="rejected"))throw new Error("net");
     const m=new Map();rs.forEach(r=>{if(r.status==="fulfilled")(Array.isArray(r.value)?r.value:[r.value]).forEach(c=>{if(c&&c.id!=null)m.set(c.id,c)})});return[...m.values()]};
   const urls=[];
-  if(ar){urls.push(L+`get?track_name=${e(ti)}&artist_name=${e(ar)}`+(t.al?`&album_name=${e(t.al)}`:"")+(t.d?`&duration=${Math.round(t.d)}`:""));urls.push(L+`search?track_name=${e(ti)}&artist_name=${e(ar)}`)}
+  if(ar){urls.push(L+`get?track_name=${e(ti)}&artist_name=${e(ar)}`+(t.al&&!t.yt?`&album_name=${e(t.al)}`:"")+(t.d&&!t.yt?`&duration=${Math.round(t.d)}`:""));urls.push(L+`search?track_name=${e(ti)}&artist_name=${e(ar)}`)}
   urls.push(L+`search?q=${e((ar+" "+ti).trim())}`,L+`search?q=${e(ti)}`);
   V.slice(1).forEach(v=>urls.push(L+`search?q=${e((v.a+" "+v.t).trim())}`));
   let r=lyPick(await run(urls),V,t);
@@ -1103,7 +1111,7 @@ async function lyLookup(t){
   return r}
 function lyHead(){const t=T[S.cur];if(!t)return;$("lyA").textContent=t.a+(t.lyBusy?" · Searching…":t.lsrc?" · "+t.lsrc:"")}
 async function findLyrics(i,manual,force){const t=T[i];
-  if(!t||!t.url||t.radio){if(manual)toast("No online lyrics for this one");return}
+  if(!t||(!t.url&&!t.yt)||t.radio){if(manual)toast("No online lyrics for this one");return}
   if(t.lrc&&!force){if(manual)toast("This song already has synced lyrics");return}
   t.lyTried=1;t.lyTs=Date.now();t.lyBusy=1;if(S.cur===i){if(!t.lrc&&!t.plain)$("lyL").innerHTML='<p class="none">Searching for lyrics…</p>';lyHead()}
   let msg;
@@ -1115,7 +1123,7 @@ async function findLyrics(i,manual,force){const t=T[i];
       else msg=t.plain||t.lrc?"Only plain lyrics online, kept yours":"No lyrics found for this song"}}
   catch(e){msg="Couldn't reach the lyrics service";t.lyTried=0}
   saveSoon(t);t.lyBusy=0;if(manual)toast(msg);if(S.cur===i)lyrRender()}
-function openLyrics(){$("lyr").classList.add("open");S.lyUser=0;S.lyInstant=true;S.lk=-2;lyrSync();const t=T[S.cur];if(t&&t.url&&!t.radio&&!t.lrc&&!t.lyTried)findLyrics(S.cur,false)}
+function openLyrics(){$("lyr").classList.add("open");S.lyUser=0;S.lyInstant=true;S.lk=-2;lyrSync();const t=T[S.cur];if(t&&(t.url||t.yt)&&!t.radio&&!t.lrc&&!t.lyTried)findLyrics(S.cur,false)}
 async function findInfo(i){const t=T[i];if(!t||!t.url||t.radio)return;
   const a0=(t.a||"").split(/,\s*/)[0],ar=a0==="On this device"?"":a0,n=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
   try{toast("Checking iTunes…");
@@ -1377,7 +1385,7 @@ function glowSet(t){const a=$("amb");if(!a)return;
       im.src=t.img}}
   a.style.background=t.glow?`url(${t.glow}) center/100% 100%`:art(t.c)}
 /* lyrics follow the music: look them up for every song that starts, and warm up the next one */
-const needLy=t=>t&&t.url&&!t.radio&&!t.ph&&!t.lrc&&!t.lyBusy&&(!t.lyTried||Date.now()-(t.lyTs||0)>36e5);
+const needLy=t=>t&&(t.url||t.yt)&&!t.radio&&!t.ph&&!t.lrc&&!t.lyBusy&&(!t.lyTried||Date.now()-(t.lyTs||0)>36e5);
 function autoLyrics(){const i=S.cur;if(needLy(T[i]))findLyrics(i,false);
   clearTimeout(S.pft);S.pft=setTimeout(()=>{const ni=peekNext();if(ni!=null&&needLy(T[ni]))findLyrics(ni,false)},2500)}
 
@@ -1811,7 +1819,7 @@ function ytState(e){const t=T[S.cur];if(!t||!t.yt)return;const d=e.data;
   if(d===0)next(true);
   else if(d===1&&!S.playing){S.playing=true;sync()}
   else if(d===2&&S.playing&&!YTX.busy){S.playing=false;sync()}}
-function ytPlay(t,tog){DK.forEach(e=>e.pause());RA.pause();RB.pause();audioStop();A=RA;const w=$("ytw");w.hidden=false;ytPlaceSoon();if(!IM.on&&!$("full").classList.contains("open")&&!$("lyr").classList.contains("open")){if(mqDesk.matches)imOpen();else openFull()}
+function ytPlay(t,tog){ytInfo(t);DK.forEach(e=>e.pause());RA.pause();RB.pause();audioStop();A=RA;const w=$("ytw");w.hidden=false;ytPlaceSoon();if(!IM.on&&!$("full").classList.contains("open")&&!$("lyr").classList.contains("open")){if(mqDesk.matches)imOpen();else openFull()}
   ytLoad().then(()=>{if(T[S.cur]!==t)return;
     if(!YTX.p){YTX.p=new window.YT.Player("ytp",{width:"100%",height:"100%",videoId:t.yt,playerVars:{playsinline:1,rel:0,autoplay:S.playing?1:0,origin:/^https?:/.test(location.protocol)?location.origin:undefined},
       events:{onReady:()=>{YTX.ready=1;YTX.vid=t.yt;const c=T[S.cur];try{YTX.p.setVolume(Math.round((S.vol==null?1:S.vol)*100))}catch(e){}if(c&&c.yt){if(c.yt!==YTX.vid){YTX.vid=c.yt;YTX.p.loadVideoById(c.yt)}ytApply()}},
@@ -1865,7 +1873,7 @@ function imDraw(t){const x=IM.cx;if(!x)return;
     g.addColorStop(0,`rgba(${rgb},.85)`);g.addColorStop(1,`rgba(255,255,255,0)`);x.strokeStyle=g;x.beginPath();x.moveTo(px,h+2);x.lineTo(px,h-bh);x.stroke()}
   const gl=$("imG");if(gl)gl.style.transform=`scale(${(1+low*.14).toFixed(3)})`}
 function imOpen(){if(IM.on)return;if(S.cur<0||!T[S.cur]){toast("Play a song and this fills the screen");return}
-  IM.on=true;IM.guard=Date.now()+600;IM.pm=null;imRender();ytPlaceSoon();imBar(true);const e=$("im");e.classList.add("open");e.setAttribute("aria-hidden","false");imSize();setTimeout(imSize,900);vzKick()}
+  IM.on=true;IM.guard=Date.now()+600;IM.pm=null;imRender();updCtl();ytPlaceSoon();imBar(true);const e=$("im");e.classList.add("open");e.setAttribute("aria-hidden","false");imSize();setTimeout(imSize,900);vzKick()}
 function imClose(){if(!IM.on)return;IM.on=false;clearTimeout(IM.ht);$("app").classList.remove("imfs");IM.last=Date.now();const e=$("im");e.classList.remove("open");e.setAttribute("aria-hidden","true");const c=IM.cx;if(c)c.clearRect(0,0,IM.w,IM.h)}
 function imAct(e){if(e.key==="Escape"&&IM.on)imClose()}
 addEventListener("keydown",imAct,{capture:true});
@@ -1984,6 +1992,25 @@ addEventListener("popstate",()=>{if(HB.ign){HB.ign=false;return}
   if(HB.n>0){HB.n--;if(!backStep()){}histSync()}});
 setInterval(histSync,250);
 ["mdl","lyr","full","im"].forEach(id=>{const e=$(id);if(e)new MutationObserver(histSync).observe(e,{attributes:true,attributeFilter:["class","hidden"]})});
+
+$("imLs").innerHTML=svg(I.heart);$("mLk").innerHTML=svg(I.heart);
+$("imLk").onclick=()=>{if(S.cur>=0)toggleLike(S.cur)};$("mLk").onclick=e=>{e.stopPropagation();if(S.cur>=0)toggleLike(S.cur)};
+updCtl();
+
+/* ---------- YouTube videos: read title, description and tags to find lyrics ---------- */
+async function ytInfo(t){if(!t||!t.yt||t.ytInfo)return;t.ytInfo=1;
+  try{const d=await jget(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${t.yt}&key=${YTK}`),v=(d.items||[])[0];if(!v)return;
+    const sn=v.snippet||{};t.tags=(sn.tags||[]).slice(0,30);t.ytc=sn.channelTitle||"";
+    const m=String(sn.description||"").match(/Provided to YouTube by[^\n]*\n+\s*([^\n·]+?)\s*·\s*([^\n]+)/);
+    if(m){t.lt=m[1].trim();t.la=m[2].split("·")[0].trim()}
+    const dm=((v.contentDetails&&v.contentDetails.duration)||"").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if(dm){const s=(+dm[1]||0)*3600+(+dm[2]||0)*60+(+dm[3]||0);if(s&&!t.d)t.d=s}
+  }catch(e){t.ytInfo=0}}
+function ytVariants(t){const raw=lclean(t.t);
+  if(t.lt&&t.la)return{t:lclean(t.lt),a:lclean(t.la),base:raw};
+  const p=raw.split(/\s+[-–—|:]\s+/);
+  if(p.length>1)return{t:p.slice(1).join(" "),a:p[0],base:raw};
+  return{t:raw,a:lclean(t.a||""),base:raw}}
 </script>
 </body>
 </html>
