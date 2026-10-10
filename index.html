@@ -496,6 +496,17 @@ textarea{width:100%;background:var(--card);border:1px solid var(--line);border-r
 #app[data-tv] .imh,#app[data-tv] #imX{display:none}#app[data-tv] #imL2{left:26px}
 @media (min-width:860px){#mini #mT{color:#f3ede0}#mini #mA{color:#b9b2a5}}
 @media (min-width:860px){#app:has(#mini[hidden]){--pbh:0px}main,#sheet,nav,#hd,#im{transition:bottom .35s ease}}
+#ytx{display:none!important}
+.imi{gap:14px}.ims{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:12px;margin:8px 0 4px}
+.ims1{padding:13px 14px}.ims1 b{font-size:19px}.ims1 small{margin-top:5px}
+.imbar{margin-top:14px}.imal{margin-top:-4px}.imn{margin-top:4px}
+@media (min-width:860px){
+ .imw{gap:clamp(36px,5vw,84px);padding:84px clamp(36px,5vw,88px) 132px}
+ .imart{width:min(40vw,calc(100vh - 360px),520px);min-width:240px}
+ .imw{padding-left:max(clamp(36px,5vw,88px),calc((100% - 1180px)/2));padding-right:max(clamp(36px,5vw,88px),calc((100% - 1180px)/2))}
+ #imX,#imL2{top:28px}#imX{left:36px}#imL2{left:128px}
+ #app[data-tv] #imL2{left:36px}
+}
 </style>
 </head>
 <body>
@@ -1847,9 +1858,10 @@ function imProg(){const t=T[S.cur];if(!t||!IM.on)return;
   const ls=lines(S.cur),sy=lsynced(S.cur),k=S.lk,ly=sy&&k>=0&&ls[k]?ls[k]:"";if($("imL").textContent!==ly)$("imL").textContent=ly;}
 function imSize(){const c=IM.cv=IM.cv||$("imv");if(!c)return;const r=c.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);IM.w=Math.max(1,r.width);IM.h=Math.max(1,r.height);c.width=Math.round(IM.w*d);c.height=Math.round(IM.h*d);IM.cx=c.getContext("2d");if(IM.cx)IM.cx.setTransform(d,0,0,d,0,0)}
 /* spectrum rising from the bottom edge, mirrored so the bass sits in the middle; the glow behind the art breathes with it */
-function imDraw(t){const x=IM.cx;if(!x)return;const n=VZ.n,w=IM.w,h=IM.h,mid=(n-1)/2,step=w/n,rgb=t?acc(t.c):"201,151,90";let low=0;for(let i=0;i<8;i++)low+=VZ.v[i];low/=8;
+function imDraw(t){const x=IM.cx;if(!x)return;
+  if(!(IM.fc=(IM.fc||0)+1)%20||!IM.cap){const a=document.querySelector("#im .imart"),c=IM.cv;if(a&&c){const ar=a.getBoundingClientRect(),cr=c.getBoundingClientRect(),avail=cr.bottom-ar.bottom-12;IM.cap=mqDesk.matches?Math.max(22,Math.min(avail,IM.h*.16)):IM.h*.12}else IM.cap=IM.h*.12}const n=VZ.n,w=IM.w,h=IM.h,mid=(n-1)/2,step=w/n,rgb=t?acc(t.c):"201,151,90";let low=0;for(let i=0;i<8;i++)low+=VZ.v[i];low/=8;
   x.clearRect(0,0,w,h);x.lineCap="round";x.lineWidth=Math.max(2,step*.42);
-  for(let j=0;j<n;j++){const i=Math.round(Math.abs(j-mid)/mid*(n-1)),v=VZ.v[i];if(v<.01)continue;const bh=4+v*h*.3,px=(j+.5)*step,g=x.createLinearGradient(0,h,0,h-bh);
+  for(let j=0;j<n;j++){const i=Math.round(Math.abs(j-mid)/mid*(n-1)),v=VZ.v[i];if(v<.01)continue;const bh=4+v*IM.cap,px=(j+.5)*step,g=x.createLinearGradient(0,h,0,h-bh);
     g.addColorStop(0,`rgba(${rgb},.85)`);g.addColorStop(1,`rgba(255,255,255,0)`);x.strokeStyle=g;x.beginPath();x.moveTo(px,h+2);x.lineTo(px,h-bh);x.stroke()}
   const gl=$("imG");if(gl)gl.style.transform=`scale(${(1+low*.14).toFixed(3)})`}
 function imOpen(){if(IM.on)return;if(S.cur<0||!T[S.cur]){toast("Play a song and this fills the screen");return}
@@ -1936,7 +1948,7 @@ function tvMove(k){const els=tvList(),cur=document.activeElement;if(!cur||!els.i
     else{ok=dy<-4&&Math.abs(dx)<=Math.abs(dy)*1.6+c.width;p=-dy;o=Math.abs(dx)}
     if(ok){const s=p+o*2;if(s<bs){bs=s;best=e}}});
   if(best){best.focus({preventScroll:true});try{best.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"})}catch(e){}}}
-function tvBack(){if(!$("mdl").hidden)closeM();else if($("lyr").classList.contains("open"))$("lyr").classList.remove("open");else if(IM.on)imClose();else if($("full").classList.contains("open"))$("full").classList.remove("open");else if(S.nav){S.nav=null;render()}}
+function tvBack(){backStep()}
 addEventListener("keydown",e=>{if(!S.tv)return;const k=e.key,c=e.keyCode,tag=e.target&&e.target.tagName;
   if(c===10009||c===461||k==="BrowserBack"||k==="GoBack"||(k==="Backspace"&&tag!=="INPUT"&&tag!=="TEXTAREA")){e.preventDefault();e.stopImmediatePropagation();tvBack();return}
   if(k==="MediaPlayPause"||c===10252||c===415||c===19||k==="MediaPlay"||k==="MediaPause"){e.preventDefault();e.stopImmediatePropagation();if(S.cur>=0)toggle();return}
@@ -1953,6 +1965,25 @@ new MutationObserver(()=>{if(S.tv){clearTimeout(S.tvm);S.tvm=setTimeout(tvMark,8
 addEventListener("resize",()=>{if(S.tv)tvApply()});
 $("view").addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-tool=tv]");if(!b)return;LS.set("milo.tv",!tvOn());tvApply();render();toast(tvOn()?"TV mode on. Use the arrow keys and OK on your remote.":"TV mode off")});
 tvApply();
+
+/* ---------- device back button: step back through screens instead of leaving the app ---------- */
+var HB={n:0,ign:false};
+function layerN(){return (!$("mdl").hidden?1:0)+($("lyr").classList.contains("open")?1:0)+(IM.on?1:0)+($("full").classList.contains("open")?1:0)+(S.nav?1:0)+(S.tab&&S.tab!=="Home"?1:0)}
+function backStep(){if(!$("mdl").hidden){closeM();return true}
+  if($("lyr").classList.contains("open")){$("lyr").classList.remove("open");return true}
+  if(IM.on){imClose();return true}
+  if($("full").classList.contains("open")){$("full").classList.remove("open");return true}
+  if(S.nav){S.nav=null;render();return true}
+  if(S.tab&&S.tab!=="Home"){go("Home");return true}
+  return false}
+function histSync(){const c=layerN();
+  if(c>HB.n){try{for(let i=HB.n;i<c;i++)history.pushState({milo:i+1},"")}catch(e){}HB.n=c}
+  else if(c<HB.n){const k=HB.n-c;HB.n=c;HB.ign=true;try{history.go(-k)}catch(e){HB.ign=false}setTimeout(()=>{HB.ign=false},600)}}
+try{history.replaceState({milo:0},"")}catch(e){}
+addEventListener("popstate",()=>{if(HB.ign){HB.ign=false;return}
+  if(HB.n>0){HB.n--;if(!backStep()){}histSync()}});
+setInterval(histSync,250);
+["mdl","lyr","full","im"].forEach(id=>{const e=$(id);if(e)new MutationObserver(histSync).observe(e,{attributes:true,attributeFilter:["class","hidden"]})});
 </script>
 </body>
 </html>
