@@ -40,7 +40,7 @@ Your library, the YouTube Music catalogue, live radio and word-by-word karaoke l
 | 📺 **Smart TV** | Samsung Tizen and LG webOS packages, TV mode switches on automatically. |
 
 <div align="center">
-<img src="docs/a_m_Home.png" width="23%" alt="Home">
+<img src="docs/home mobile.png" width="23%" alt="Home">
 <img src="docs/a_m_Library.png" width="23%" alt="Library">
 <img src="docs/a_m_Profile.png" width="23%" alt="Profile">
 <img src="docs/a_d_Discover.png" width="23%" alt="Discover">
