@@ -14,7 +14,7 @@ Your library, the YouTube Music catalogue, live radio and word-by-word karaoke l
 
 [Live demo](https://claude.ai/artifact/LtVpb7FCy9LAnFfeNQknZr) · [Install](#-install) · [Features](#-features) · [Configure](#-configure) · [Smart TVs](#-smart-tvs)
 
-<img src="docs/a_d_Home.png" alt="milo. on desktop" width="88%">
+<img src="docs/discover.png" alt="milo. on desktop" width="88%">
 
 </div>
 
