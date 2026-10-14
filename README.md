@@ -42,8 +42,7 @@ Your library, the YouTube Music catalogue, live radio and word-by-word karaoke l
 <div align="center">
 <img src="docs/home mobile.png" width="23%" alt="Home">
 <img src="docs/library mobile.png" width="23%" alt="Library">
-<img src="docs/profile mobile.png
-" width="23%" alt="Profile">
+<img src="docs/profile mobile.png" width="23%" alt="Profile">
 <img src="docs/discover.png" width="23%" alt="Discover">
 <img src="docs/library.png" width="23%" alt="Library">
 </div>
