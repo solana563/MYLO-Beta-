@@ -14,7 +14,7 @@ Your library, the YouTube Music catalogue, live radio and word-by-word karaoke l
 
 [Live demo](https://claude.ai/artifact/LtVpb7FCy9LAnFfeNQknZr) · [Install](#-install) · [Features](#-features) · [Configure](#-configure) · [Smart TVs](#-smart-tvs)
 
-<img src="docs/discover.png" alt="milo. on desktop" width="88%">
+<img src="docs/a_d_Home.png" alt="milo. on desktop" width="88%">
 
 </div>
 
@@ -40,11 +40,10 @@ Your library, the YouTube Music catalogue, live radio and word-by-word karaoke l
 | 📺 **Smart TV** | Samsung Tizen and LG webOS packages, TV mode switches on automatically. |
 
 <div align="center">
-<img src="docs/home mobile.png" width="23%" alt="Home">
-<img src="docs/library mobile.png" width="23%" alt="Library">
-<img src="docs/profile mobile.png" width="23%" alt="Profile">
-<img src="docs/discover.png" width="23%" alt="Discover">
-<img src="docs/library.png" width="23%" alt="Library">
+<img src="docs/a_m_Home.png" width="23%" alt="Home">
+<img src="docs/a_m_Library.png" width="23%" alt="Library">
+<img src="docs/a_m_Profile.png" width="23%" alt="Profile">
+<img src="docs/a_d_Discover.png" width="23%" alt="Discover">
 </div>
 
 ## 📦 What's in the folder
@@ -82,7 +81,7 @@ Try it locally first:
 python3 -m http.server 8080   # then open http://localhost:8080
 ```
 
-> **Updating:** after editing `index.html`, bump the version in `sw.js` (`milo-v79` → `milo-v78`) so installed copies refresh. An installed app may need one extra restart to pick it up.
+> **Updating:** after editing `index.html`, bump the version in `sw.js` (`milo-v90` → `milo-v78`) so installed copies refresh. An installed app may need one extra restart to pick it up.
 
 For the Play Store, Microsoft Store or App Store, upload your hosted address to [pwabuilder.com](https://pwabuilder.com).
 
@@ -125,3 +124,9 @@ Made with ♥ by **UBayanda**
 ## 📱 Native apps
 
 milo. detects whether it runs in a browser, an installed web app, an Android WebView (Web2APK) or Capacitor, and turns on storage protection, back-button handling, screen-on while playing and the native share / save sheets where they exist. See [NATIVE.md](NATIVE.md) for the Capacitor setup and what still needs native code.
+
+## Latest additions
+- Save for offline: song menu > "Save for offline" and a download button on playlist pages. Works for songs with a direct audio link whose source allows downloads. Radio stations and YouTube songs stream live and cannot be saved.
+- Share as image: song menu > "Share as image" makes a card with the art. In lyrics, the share button lets you pick up to 6 lines and share them as an image.
+- Sleep timer now eases the volume down over the last 25 seconds (also for "End of song").
+- Messaging: re-run supabase-setup.sql once so live delivery, read receipts, reactions and replies work.
